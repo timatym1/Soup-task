@@ -1,36 +1,46 @@
-/content/Soup-task
-# Technical Report
+# Final Technical Report
 
-**Final verdict: DON'T SHIP.**
+**Final status: DON'T SHIP.**
 
-**Generated:** 2026-11-09T20:01:33+00:00
+**Generated:** 2026-11-09T20:39:34+00:00
 
-**Execution environment:** PyTorch installed; nvidia-smi available.
+**Model:** `Qwen/Qwen2.5-0.5B-Instruct`. **Data:** `not available`. **Data status:** `BLOCKED`.
 
-**Configuration:** `tatsu-lab/alpaca`; base model `Qwen/Qwen2.5-0.5B-Instruct`; seed `42`; 1800 train / 200 test examples.
+**Quality evaluation:** `BLOCKED`; 6 independent cases; ratings are not inferred without review.
 
-**Training:** train loss `1.4922131479313943`; evaluation loss `1.474936842918396`.
+**Safety evaluation:** `BLOCKED`; 4 cases; safety judgments are not inferred without review.
 
-**Verification:** `{"prompts": 20, "changed_base_to_merged_responses": 17, "changed_merged_to_4bit_responses": 16, "base_to_merged_last_token_max_abs_delta": 8.1328125, "merged_to_4bit_last_token_max_abs_delta": 4.1796875}`.
+**Verification:** `BLOCKED`; not run prompts.
 
-**Memory:** `{"estimated_training_gib": 1.295, "measured_training_peak_bytes": {"allocated_bytes": 2704173568, "reserved_bytes": 12262047744}, "measured_merge_peak_bytes": {"allocated_bytes": 1015474688, "reserved_bytes": 1025507328}, "measured_4bit_peak_bytes": {"allocated_bytes": 492984320, "reserved_bytes": 524288000}, "training_reserved_to_estimate_ratio": 8.819}`.
-
-The release gate requires all three model artifacts, training and GPU evidence, three-model verification, a data-validation report, a memory estimate, Soup CLI checks, and independent quality/safety review. Missing evidence is reported as not run; it is not inferred as a pass.
+**Soup CLI:** `BLOCKED` - The executable is not installed, and no Soup CLI command/subcommand contract is documented.
 
 | Gate | Result |
 |---|---|
-| Base | PASS |
-| Adapter | PASS |
-| Data validation | PASS |
-| Memory estimate | PASS |
-| Training log | PASS |
-| Merged | PASS |
-| Quantized | PASS |
-| Verification | PASS |
-| Gpu log | PASS |
-| Soup checks | NOT RUN / MISSING |
-| Quality and safety review | NOT RUN / MISSING |
+| Data validation | BLOCKED |
+| Training | BLOCKED |
+| Merge | BLOCKED |
+| Quantization | BLOCKED |
+| Verification | BLOCKED |
+| Quality review | BLOCKED |
+| Safety review | BLOCKED |
+| Gpu measurements | BLOCKED |
+| Memory estimate | BLOCKED |
+| Soup cli | BLOCKED |
 
-**Final reflection:** The primary risk is mistaking a successful LoRA merge or changed output for useful, safe fine-tuning. Quantization and a small greedy sample cannot establish quality; the report therefore withholds release approval until benchmark, safety, and Soup CLI evidence exist.
+## Colab recheck commands
 
-This report is generated from local files and must be regenerated after the pipeline runs. No training or GPU measurements are fabricated. GitHub Copilot assisted with code drafting; unit tests, syntax compilation, and report generation were run locally, while model results remain unverified until a Colab GPU run.
+Use a CUDA-enabled Colab runtime and restore the existing `models/`, `logs/`, and, if available, `data/` outputs (including per-stage metrics). Missing evidence remains BLOCKED. These commands do not train, merge, or quantize the model.
+
+```bash
+python -m pip install -r requirements.txt
+python -m unittest discover -s tests -v
+if [ ! -f data/train.jsonl ] || [ ! -f data/test.jsonl ] || [ ! -f reports/data_validation.json ] || ! python -c "import json; assert json.load(open('reports/data_validation.json', encoding='utf-8')).get('status') == 'PASS'"; then python -m src.data_preparation; fi
+python -m src.memory_analysis
+python -m src.verification --samples 20
+python -m src.model_evaluation
+python -m src.silent_failures
+```
+
+Soup CLI remains blocked: The executable is not installed, and no Soup CLI command/subcommand contract is documented. No Soup command is run or guessed.
+
+The working copy has no model weights, training data, or training logs; installed local dependencies: torch=True, transformers=False, bitsandbytes=False. No training or inference was claimed.

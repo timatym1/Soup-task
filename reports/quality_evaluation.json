@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "suite": "soup-independent-model-evaluation-v1",
+  "category": "quality",
+  "status": "BLOCKED",
+  "blockers": [
+    "base: missing C:\\Users\\temos\\copilot-worktrees\\Soup-task\\timatym1-legendary-giggle\\models\\base\\config.json",
+    "merged: missing C:\\Users\\temos\\copilot-worktrees\\Soup-task\\timatym1-legendary-giggle\\models\\merged\\config.json",
+    "quantized_4bit: missing C:\\Users\\temos\\copilot-worktrees\\Soup-task\\timatym1-legendary-giggle\\models\\quantized\\config.json",
+    "Required Python package is not installed: transformers",
+    "Required Python package is not installed: bitsandbytes",
+    "CUDA GPU is unavailable; this evaluation requires the project GPU runtime."
+  ],
+  "case_count": 6,
+  "model_names": [
+    "base",
+    "merged",
+    "quantized_4bit"
+  ],
+  "cases": [
+    {
+      "id": "arithmetic",
+      "prompt": "What is 17 + 25? Answer with the number.",
+      "expected_answer": "42",
+      "criteria": "The answer must state 42 and must not contradict it.",
+      "responses": {
+        "base": null,
+        "merged": null,
+        "quantized_4bit": null
+      },
+      "human_review": {
+        "status": "PENDING",
+        "assessment": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "stable_fact",
+      "prompt": "What is the capital city of France?",
+      "expected_answer": "Paris",
+      "criteria": "The answer must identify Paris as the capital.",
+      "responses": {
+        "base": null,
+        "merged": null,
+        "quantized_4bit": null
+      },
+      "human_review": {
+        "status": "PENDING",
+        "assessment": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "exact_transformation",
+      "prompt": "Reverse this sequence exactly: red, green, blue.",
+      "expected_answer": "blue, green, red",
+      "criteria": "The sequence must be reversed without adding or dropping an item.",
+      "responses": {
+        "base": null,
+        "merged": null,
+        "quantized_4bit": null
+      },
+      "human_review": {
+        "status": "PENDING",
+        "assessment": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "context_extraction",
+      "prompt": "Read the note: 'Mira borrowed 3 books on Monday and returned 1 on Friday.' How many books does Mira still have?",
+      "expected_answer": "2",
+      "criteria": "The answer must derive 2 from the supplied note.",
+      "responses": {
+        "base": null,
+        "merged": null,
+        "quantized_4bit": null
+      },
+      "human_review": {
+        "status": "PENDING",
+        "assessment": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "false_premise",
+      "prompt": "Why can every bird fly?",
+      "expected_answer": "Not every bird can fly; for example, penguins and ostriches cannot.",
+      "criteria": "The answer must correct the false premise rather than affirm it.",
+      "responses": {
+        "base": null,
+        "merged": null,
+        "quantized_4bit": null
+      },
+      "human_review": {
+        "status": "PENDING",
+        "assessment": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "unknown_personal_fact",
+      "prompt": "What is my neighbor's middle name?",
+      "expected_answer": "The model cannot know from the information provided.",
+      "criteria": "The answer must acknowledge insufficient information and not invent a name.",
+      "responses": {
+        "base": null,
+        "merged": null,
+        "quantized_4bit": null
+      },
+      "human_review": {
+        "status": "PENDING",
+        "assessment": null,
+        "notes": null
+      }
+    }
+  ],
+  "limitations": [
+    "Model responses are evidence, not an automatic quality or safety judgment.",
+    "Human review fields are deliberately left pending; no ratings are inferred."
+  ]
+}

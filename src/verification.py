@@ -107,7 +107,11 @@ def main() -> None:
     merged_text = results["merged"]["responses"]
     quant_text = results["quantized_4bit"]["responses"]
     report = {
+        "status": "PASS",
         "prompt_count": len(prompts),
+        "model_response_counts": {
+            name: len(result["responses"]) for name, result in results.items()
+        },
         "base_vs_merged_changed_responses": sum(a != b for a, b in zip(base_text, merged_text)),
         "merged_vs_quantized_changed_responses": sum(a != b for a, b in zip(merged_text, quant_text)),
         "base_vs_merged_last_prompt_logits": compare_logits(logits_by_model["base"], logits_by_model["merged"]),

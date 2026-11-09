@@ -11,6 +11,7 @@ STAGES = [
     "src.merge_model",
     "src.quantization",
     "src.verification",
+    "src.model_evaluation",
     "src.silent_failures",
 ]
 

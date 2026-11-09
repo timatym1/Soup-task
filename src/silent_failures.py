@@ -14,8 +14,12 @@ from src.common import (
     REPORT_DIR,
     ensure_directories,
     get_logger,
+    save_json,
     timestamp,
 )
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def exists(path: Path) -> bool:
@@ -26,141 +30,270 @@ def read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
 
 
+def has_model_weights(path: Path) -> bool:
+    return any(path.glob("*.safetensors")) or any(path.glob("pytorch_model*.bin"))
+
+
+def review_complete(report: dict[str, Any], category: str) -> bool:
+    cases = report.get("cases")
+    if (
+        report.get("status") != "PASS"
+        or not isinstance(cases, list)
+        or not cases
+        or report.get("case_count") != len(cases)
+    ):
+        return False
+    for case in cases:
+        review = case.get("human_review", {})
+        if review.get("status") != "REVIEWED":
+            return False
+        if category == "quality" and review.get("assessment") is None:
+            return False
+        if category == "safety" and type(review.get("safe")) is not bool:
+            return False
+        responses = case.get("responses", {})
+        if any(not isinstance(responses.get(model), str) for model in ("base", "merged", "quantized_4bit")):
+            return False
+    return True
+
+
+def ensure_missing_reports() -> None:
+    defaults = {
+        "data_validation.json": {
+            "status": "BLOCKED",
+            "reason": "No data validation evidence exists. Run src.data_preparation.",
+        },
+        "memory_budget.json": {
+            "status": "BLOCKED",
+            "reason": "No model configuration or memory estimate is available.",
+        },
+        "verification.json": {
+            "status": "BLOCKED",
+            "reason": "Three-model verification has not produced a report.",
+        },
+        "quality_evaluation.json": {
+            "status": "BLOCKED",
+            "blockers": ["Run src.model_evaluation to evaluate the independent quality suite."],
+        },
+        "safety_evaluation.json": {
+            "status": "BLOCKED",
+            "blockers": ["Run src.model_evaluation to evaluate the independent safety suite."],
+        },
+    }
+    for filename, payload in defaults.items():
+        path = REPORT_DIR / filename
+        if not path.exists():
+            save_json(path, payload)
+
+
 def main() -> None:
     logger = get_logger("silent_failures", "silent_failures.log")
     ensure_directories()
-    data_report_path = REPORT_DIR / "data_validation.json"
-    verification_path = REPORT_DIR / "verification.json"
-    data = read_json(data_report_path)
-    verification = read_json(verification_path)
+    ensure_missing_reports()
+
+    data = read_json(REPORT_DIR / "data_validation.json")
     memory = read_json(REPORT_DIR / "memory_budget.json")
+    verification = read_json(REPORT_DIR / "verification.json")
+    quality = read_json(REPORT_DIR / "quality_evaluation.json")
+    safety = read_json(REPORT_DIR / "safety_evaluation.json")
     training = read_json(ADAPTER_DIR / "training_metrics.json")
     merge = read_json(MERGED_DIR / "merge_metrics.json")
     quantization = read_json(QUANTIZED_DIR / "quantization_metrics.json")
 
-    data_status = (
-        "NOT RUN"
-        if not data
-        else "PASS"
-        if data.get("valid_unique_records", 0) >= 1000
-        else "FAIL"
+    data_pass = (
+        data.get("status") == "PASS"
+        and data.get("valid_unique_records", 0) >= 1000
+        and data.get("train_records", 0) > 0
+        and data.get("test_records", 0) > 0
+        and (ROOT / "data" / "train.jsonl").is_file()
+        and (ROOT / "data" / "test.jsonl").is_file()
     )
+    verification_pass = (
+        verification.get("status") == "PASS"
+        and verification.get("prompt_count", 0) > 0
+        and verification.get("model_response_counts")
+        == {
+            "base": verification.get("prompt_count"),
+            "merged": verification.get("prompt_count"),
+            "quantized_4bit": verification.get("prompt_count"),
+        }
+        and all(
+            len(verification.get("models", {}).get(model, {}).get("responses", []))
+            == verification.get("prompt_count")
+            for model in ("base", "merged", "quantized_4bit")
+        )
+    )
+    model_checks = {
+        "base": exists(BASE_DIR / "config.json") and has_model_weights(BASE_DIR),
+        "adapter": exists(ADAPTER_DIR / "adapter_config.json") and has_model_weights(ADAPTER_DIR),
+        "merged": exists(MERGED_DIR / "config.json") and has_model_weights(MERGED_DIR),
+        "quantized": exists(QUANTIZED_DIR / "config.json") and has_model_weights(QUANTIZED_DIR),
+    }
+    gpu_evidence = (
+        bool(shutil.which("nvidia-smi"))
+        and exists(LOG_DIR / "nvidia-smi.txt")
+        and bool(training.get("gpu_peak"))
+        and bool(merge.get("gpu_peak"))
+        and bool(quantization.get("gpu_peak"))
+    )
+    soup_cli = shutil.which("soup")
+    training_pass = (
+        bool(training.get("train_metrics"))
+        and bool(training.get("eval_metrics"))
+        and model_checks["adapter"]
+    )
+    merge_pass = model_checks["merged"] and bool(merge.get("gpu_peak"))
+    quantization_pass = model_checks["quantized"] and bool(quantization.get("gpu_peak"))
+    quality_pass = review_complete(quality, "quality")
+    safety_pass = review_complete(safety, "safety")
+
     checks = [
-        ("Data", "Empty/malformed rows and duplicates", "data_validation.json records validation counts; at least 1000 unique valid rows required", data_status),
-        ("Tokenizer/template", "Missing chat template or untrainable tokenized rows", "Training aborts on missing template/empty supervised labels; saved training metrics prove the run reached completion", "PASS" if training else "NOT RUN"),
-        ("Training", "No effective parameter update", "Require saved training metrics and compare base/merged last-token logits", "PASS" if training and verification.get("base_vs_merged_last_prompt_logits", {}).get("max_absolute_delta", 0) > 0 else "NOT RUN"),
-        ("Merge", "Adapter not merged or corrupted output", "Merged config and weights present; compare merged logits with base", "PASS" if exists(MERGED_DIR / "config.json") and verification else "NOT RUN"),
-        ("Quantization", "4-bit artifact missing or excessive output drift", "Quantized config/weights present; compare against merged on identical prompts", "PASS" if exists(QUANTIZED_DIR / "config.json") and verification else "NOT RUN"),
-        ("Inference", "Load/generation failure", "All three models loaded and generated the same test prompts", "PASS" if len(verification.get("models", {})) == 3 else "NOT RUN"),
-        ("GPU/memory", "VRAM estimate differs from real peak", "Compare memory_budget.json, per-stage GPU metrics and timestamped nvidia-smi", "PASS" if (LOG_DIR / "nvidia-smi.txt").exists() and memory and training.get("gpu_peak") and merge.get("gpu_peak") and quantization.get("gpu_peak") else "NOT RUN"),
-        ("Soup CLI", "Soup Doctor/Pre-flight/Ship findings", "Not invoked: CLI subcommand contract is not supplied; no detections are claimed", "NOT RUN" if shutil.which("soup") else "NOT INSTALLED"),
+        ("Data validation", "PASS" if data_pass else "BLOCKED"),
+        ("Training and adapter", "PASS" if training_pass else "BLOCKED"),
+        ("Merge", "PASS" if merge_pass else "BLOCKED"),
+        ("Quantization", "PASS" if quantization_pass else "BLOCKED"),
+        ("Three-model verification", "PASS" if verification_pass else "BLOCKED"),
+        ("Quality evaluation", "PASS" if quality_pass else "BLOCKED"),
+        ("Safety evaluation", "PASS" if safety_pass else "BLOCKED"),
+        ("GPU and measured memory", "PASS" if gpu_evidence else "BLOCKED"),
+        ("Soup CLI", "BLOCKED"),
+        (
+            "Memory estimate",
+            "PASS"
+            if memory.get("status") == "ESTIMATE_ONLY"
+            and memory.get("training_estimate_bytes", {}).get("total")
+            else "BLOCKED",
+        ),
     ]
 
     lines = [
         "# Silent Failures Analysis",
         "",
-        "| Area | Potential silent failure | Detection/evidence | Local result |",
-        "|---|---|---|---|",
-    ]
-    lines.extend(f"| {area} | {failure} | {evidence} | **{status}** |" for area, failure, evidence, status in checks)
-    lines += [
+        f"**Generated:** {timestamp()}",
         "",
-        "A PASS means the stated local check ran; it is not a model-quality or release approval. "
-        "Soup Data Doctor, Pre-flight and Ship results remain unverified unless separately run with the actual CLI.",
+        "| Area | Potential silent failure | Evidence required | Result |",
+        "|---|---|---|---|",
+        "| Data | Invalid, duplicated, or empty examples; split not written | Passing validation report and on-disk train/test JSONL | "
+        + checks[0][1]
+        + " |",
+        "| Training | No completed update or adapter missing | Training metrics and adapter configuration | "
+        + checks[1][1]
+        + " |",
+        "| Merge | Adapter not merged or output weights missing | Merged configuration, weights, and merge metrics | "
+        + checks[2][1]
+        + " |",
+        "| Quantization | 4-bit artifact missing or not measured | Quantized configuration, weights, and quantization metrics | "
+        + checks[3][1]
+        + " |",
+        "| Verification | One or more models did not generate every prompt | Explicit PASS and per-model response counts matching prompt count | "
+        + checks[4][1]
+        + " |",
+        "| Quality | Output relevance, correctness, or hallucination risk unreviewed | Separate evaluation set, all model responses, and completed human assessments | "
+        + checks[5][1]
+        + " |",
+        "| Safety | Unsafe compliance or malformed-input handling unreviewed | Separate safety set, all model responses, and completed human assessments | "
+        + checks[6][1]
+        + " |",
+        "| GPU/memory | Missing GPU measurements or runtime log | CUDA peaks for train/merge/quantization and nvidia-smi log | "
+        + checks[7][1]
+        + " |",
+        "| Soup CLI | Unknown or unavailable command contract | Installed CLI and documented, authorized command specification | "
+        + checks[8][1]
+        + " |",
+        "| Memory estimate | Estimate absent or mistaken for measured usage | Memory estimate explicitly distinguished from recorded CUDA peaks | "
+        + checks[9][1]
+        + " |",
+        "",
+        "BLOCKED means evidence is unavailable or the specified review was not completed; it is not a PASS. "
+        "A model loading or output-difference check alone does not establish quality, safety, or acceptable quantization drift.",
         "",
     ]
     (REPORT_DIR / "silent_failures.md").write_text("\n".join(lines), encoding="utf-8")
 
+    soup_reason = (
+        "The executable is not installed, and no Soup CLI command/subcommand contract is documented."
+        if not soup_cli
+        else "No Soup CLI command/subcommand specification is provided in the project documentation."
+    )
+    all_models_verified = verification_pass and all(model_checks.values())
     release_checks = {
-        "base": exists(BASE_DIR / "config.json"),
-        "adapter": exists(ADAPTER_DIR / "adapter_config.json"),
-        "data_validation": bool(data and data.get("valid_unique_records", 0) >= 1000),
-        "memory_estimate": exists(REPORT_DIR / "memory_budget.json"),
-        "training_log": exists(LOG_DIR / "training.log"),
-        "merged": exists(MERGED_DIR / "config.json"),
-        "quantized": exists(QUANTIZED_DIR / "config.json"),
-        "verification": len(verification.get("models", {})) == 3,
-        "gpu_log": (
-            exists(LOG_DIR / "nvidia-smi.txt")
-            and bool(training.get("gpu_peak"))
-            and bool(merge.get("gpu_peak"))
-            and bool(quantization.get("gpu_peak"))
+        "data_validation": data_pass,
+        "training": training_pass,
+        "merge": merge_pass,
+        "quantization": quantization_pass,
+        "verification": all_models_verified,
+        "quality_review": quality_pass,
+        "safety_review": safety_pass,
+        "gpu_measurements": gpu_evidence,
+        "memory_estimate": (
+            memory.get("status") == "ESTIMATE_ONLY"
+            and bool(memory.get("training_estimate_bytes", {}).get("total"))
         ),
-        "soup_checks": False,
-        "quality_and_safety_review": False,
+        "soup_cli": False,
     }
     verdict = "SHIP" if all(release_checks.values()) else "DON'T SHIP"
-    train_metrics = training.get("train_metrics", {})
-    eval_metrics = training.get("eval_metrics", {})
-    verification_summary = {
-        "prompts": verification.get("prompt_count", "not run"),
-        "changed_base_to_merged_responses": verification.get("base_vs_merged_changed_responses", "not run"),
-        "changed_merged_to_4bit_responses": verification.get("merged_vs_quantized_changed_responses", "not run"),
-        "base_to_merged_last_token_max_abs_delta": verification.get(
-            "base_vs_merged_last_prompt_logits", {}
-        ).get("max_absolute_delta", "not run"),
-        "merged_to_4bit_last_token_max_abs_delta": verification.get(
-            "merged_vs_quantized_last_prompt_logits", {}
-        ).get("max_absolute_delta", "not run"),
+    check_status = {
+        name: "PASS" if passed else "BLOCKED"
+        for name, passed in release_checks.items()
     }
-    memory_summary = {
-        "estimated_training_gib": memory.get("training_estimate_bytes", {}).get("total_gib", "not run"),
-        "measured_training_peak_bytes": training.get("gpu_peak", "not run"),
-        "measured_merge_peak_bytes": merge.get("gpu_peak", "not run"),
-        "measured_4bit_peak_bytes": quantization.get("gpu_peak", "not run"),
-    }
-    estimated_training_bytes = memory.get("training_estimate_bytes", {}).get("total")
-    measured_training_bytes = training.get("gpu_peak", {}).get("reserved_bytes")
-    if estimated_training_bytes and measured_training_bytes:
-        memory_summary["training_reserved_to_estimate_ratio"] = round(
-            measured_training_bytes / estimated_training_bytes, 3
-        )
-    environment = (
-        f"PyTorch {'installed' if find_spec('torch') else 'not installed'}; "
-        f"nvidia-smi {'available' if shutil.which('nvidia-smi') else 'unavailable'}."
-    )
-    report = [
-        "# Technical Report",
+    quality_cases = quality.get("case_count", 0)
+    safety_cases = safety.get("case_count", 0)
+    report_lines = [
+        "# Final Technical Report",
         "",
-        f"**Final verdict: {verdict}.**",
+        f"**Final status: {verdict}.**",
         "",
         f"**Generated:** {timestamp()}",
         "",
-        f"**Execution environment:** {environment}",
+        f"**Model:** `{MODEL_ID}`. **Data:** `{data.get('dataset_id', 'not available')}`. "
+        f"**Data status:** `{data.get('status', 'BLOCKED')}`.",
         "",
-        f"**Configuration:** `{data.get('dataset_id', 'not run')}`; base model `{MODEL_ID}`; "
-        f"seed `{data.get('seed', 'not run')}`; {data.get('train_records', 'not run')} train / "
-        f"{data.get('test_records', 'not run')} test examples.",
+        "**Quality evaluation:** "
+        f"`{quality.get('status', 'BLOCKED')}`; {quality_cases} independent cases; "
+        "ratings are not inferred without review.",
         "",
-        f"**Training:** train loss `{train_metrics.get('train_loss', 'not run')}`; "
-        f"evaluation loss `{eval_metrics.get('eval_loss', 'not run')}`.",
+        "**Safety evaluation:** "
+        f"`{safety.get('status', 'BLOCKED')}`; {safety_cases} cases; "
+        "safety judgments are not inferred without review.",
         "",
-        f"**Verification:** `{json.dumps(verification_summary, ensure_ascii=False)}`.",
+        "**Verification:** "
+        f"`{verification.get('status', 'BLOCKED')}`; "
+        f"{verification.get('prompt_count', 'not run')} prompts.",
         "",
-        f"**Memory:** `{json.dumps(memory_summary, ensure_ascii=False)}`.",
-        "",
-        "The release gate requires all three model artifacts, training and GPU evidence, three-model "
-        "verification, a data-validation report, a memory estimate, Soup CLI checks, and independent quality/safety review. Missing evidence is "
-        "reported as not run; it is not inferred as a pass.",
+        "**Soup CLI:** `BLOCKED` - " + soup_reason,
         "",
         "| Gate | Result |",
         "|---|---|",
     ]
-    report.extend(f"| {name.replace('_', ' ').capitalize()} | {'PASS' if passed else 'NOT RUN / MISSING'} |" for name, passed in release_checks.items())
-    report += [
+    report_lines.extend(f"| {name.replace('_', ' ').capitalize()} | {status} |" for name, status in check_status.items())
+    report_lines += [
         "",
-        "**Final reflection:** The primary risk is mistaking a successful LoRA merge or changed output "
-        "for useful, safe fine-tuning. Quantization and a small greedy sample cannot establish quality; "
-        "the report therefore withholds release approval until benchmark, safety, and Soup CLI evidence exist.",
+        "## Colab recheck commands",
         "",
-        "This report is generated from local files and must be regenerated after the pipeline runs. "
-        "No training or GPU measurements are fabricated. GitHub Copilot assisted with code drafting; "
-        "unit tests, syntax compilation, and report generation were run locally, while model results "
-        "remain unverified until a Colab GPU run.",
+        "Use a CUDA-enabled Colab runtime and restore the existing `models/`, `logs/`, and, if available, "
+        "`data/` outputs (including per-stage metrics). Missing evidence remains BLOCKED. "
+        "These commands do not train, merge, or quantize the model.",
+        "",
+        "```bash",
+        "python -m pip install -r requirements.txt",
+        "python -m unittest discover -s tests -v",
+        "if [ ! -f data/train.jsonl ] || [ ! -f data/test.jsonl ] || [ ! -f reports/data_validation.json ] || ! python -c \"import json; assert json.load(open('reports/data_validation.json', encoding='utf-8')).get('status') == 'PASS'\"; then python -m src.data_preparation; fi",
+        "python -m src.memory_analysis",
+        "python -m src.verification --samples 20",
+        "python -m src.model_evaluation",
+        "python -m src.silent_failures",
+        "```",
+        "",
+        f"Soup CLI remains blocked: {soup_reason} No Soup command is run or guessed.",
+        "",
+        "The working copy has no model weights, training data, or training logs; installed local "
+        f"dependencies: torch={find_spec('torch') is not None}, "
+        f"transformers={find_spec('transformers') is not None}, "
+        f"bitsandbytes={find_spec('bitsandbytes') is not None}. No training or inference was claimed.",
         "",
     ]
-    (REPORT_DIR / "final_report.md").write_text("\n".join(report), encoding="utf-8")
-    logger.info("Wrote reports/silent_failures.md and reports/final_report.md")
+    (REPORT_DIR / "final_report.md").write_text("\n".join(report_lines), encoding="utf-8")
+    logger.info("Wrote evidence-gated release and silent-failure reports")
 
 
 if __name__ == "__main__":

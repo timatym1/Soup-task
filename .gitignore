@@ -10,3 +10,8 @@ reports/
 reports/*
 !reports/final_report.md
 !reports/silent_failures.md
+!reports/data_validation.json
+!reports/memory_budget.json
+!reports/verification.json
+!reports/quality_evaluation.json
+!reports/safety_evaluation.json

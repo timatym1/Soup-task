@@ -14,7 +14,7 @@ python -m unittest discover -s tests -v
 python -m src.run_pipeline
 ```
 
-The pipeline intentionally stops on stage errors. It requires a working CUDA runtime and enough free disk for three copies of the model. Colab supplies CUDA-enabled PyTorch; `requirements.txt` intentionally does not replace that runtime package. Verify `torch.cuda.is_available()` before running. The Hugging Face model and dataset are public; set `MODEL_ID`, `DATASET_ID`, or `SEED` in the environment to override defaults. Do not put access tokens in source files; use Colab Secrets/environment variables if a gated model is selected.
+`src.run_pipeline` is the from-scratch path and includes training. Do not run it just to review existing trained artifacts. For an existing run, restore its `models/` artifacts and use the non-training checks in the final report below. The pipeline intentionally stops on stage errors. It requires a working CUDA runtime and enough free disk for three copies of the model. Colab supplies CUDA-enabled PyTorch; `requirements.txt` intentionally does not replace that runtime package. Verify `torch.cuda.is_available()` before running. The Hugging Face model and dataset are public; set `MODEL_ID`, `DATASET_ID`, or `SEED` in the environment to override defaults. Do not put access tokens in source files; use Colab Secrets/environment variables if a gated model is selected.
 
 ## Pipeline and evidence
 
@@ -23,7 +23,8 @@ The pipeline intentionally stops on stage errors. It requires a working CUDA run
 3. `src.train` checks CUDA and the tokenizer chat template, masks prompt tokens from the loss, and performs one epoch with rank-8 LoRA on `q_proj`/`v_proj`, FP16, gradient checkpointing, and paged 8-bit AdamW. Timestamped logs and training metrics are saved.
 4. `src.merge_model` safely merges the adapter into FP16 weights. `src.quantization` saves a bitsandbytes NF4 4-bit checkpoint.
 5. `src.verification` uses identical held-out prompts and deterministic greedy generation for base, merged, and quantized models. It stores all responses and last-prompt/last-token logit comparisons. This detects a change, not whether that change is good.
-6. `src.silent_failures` creates a local evidence matrix and a final verdict report. A `PASS` is limited to the specific local check described in the report.
+6. `src.model_evaluation` runs a separate fixed quality and safety prompt suite against base, merged, and quantized models. It records responses but leaves correctness, relevance, hallucination, and safety judgments pending for human review.
+7. `src.silent_failures` creates an evidence matrix and final verdict. Missing evidence is `BLOCKED`; file presence alone is not model-quality or safety evidence.
 
 `MODEL_ID` defaults to `Qwen/Qwen2.5-0.5B-Instruct`; `DATASET_ID` defaults to `tatsu-lab/alpaca`; `SEED` defaults to `42`. Current training defaults target a T4, but actual runtime can exceed 10 minutes due to downloads and evaluation.
 
@@ -33,13 +34,16 @@ The pipeline intentionally stops on stage errors. It requires a working CUDA run
 - `data/train.jsonl`, `data/test.jsonl`
 - `logs/*.log`, timestamped `logs/nvidia-smi.txt`
 - `reports/data_validation.json`, `reports/memory_budget.json`, `reports/verification.json`
+- `reports/quality_evaluation.json`, `reports/safety_evaluation.json`
 - `reports/silent_failures.md`, `reports/final_report.md`
 
 These output directories are ignored by Git to prevent accidental commits of model weights or experiment evidence. Preserve the generated logs and reports with the delivered model artifacts.
 
 ## Release status and limitations
 
-The generated final report says **DON'T SHIP** until all artifacts/evidence exist, Soup CLI checks have actually been run, and independent quality/safety review has passed. This project does not invent Soup Data Doctor, Pre-flight, or Ship results: their CLI contract is not provided, so the silent-failure report marks those checks unverified. A small greedy sample and logit delta are not a benchmark, human evaluation, or safety assessment.
+The evaluation prompts are maintained separately in `tests/fixtures/model_evaluation_cases.json`. Generated responses are not automatically scored: the report remains `NEEDS_HUMAN_REVIEW` until the independent review fields are completed. If weights or required runtime dependencies are unavailable, it records `BLOCKED` instead. The project does not invent Soup Data Doctor, Pre-flight, or Ship results: no CLI command contract is documented, so Soup checks remain blocked.
+
+For already trained artifacts in Colab, restore the existing `models/`, `logs/`, and stage metrics (and `data/` when available), then use the commands in `reports/final_report.md` to rerun checks without training, merging, or quantizing. The memory estimate is an order-of-magnitude planning aid; attention kernels, allocator fragmentation, CUDA context, tokenizer padding, and temporary merge/quantization buffers affect actual VRAM. Inspect both recorded CUDA peaks and timestamped `nvidia-smi` output. Hugging Face dataset/model terms and licenses must be reviewed before redistribution.
 
 The memory estimate is an order-of-magnitude planning aid; attention kernels, allocator fragmentation, CUDA context, tokenizer padding, and temporary merge/quantization buffers affect actual VRAM. Inspect both recorded CUDA peaks and timestamped `nvidia-smi` output. Hugging Face dataset/model terms and licenses must be reviewed before redistribution.
 

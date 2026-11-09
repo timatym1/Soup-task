@@ -76,6 +76,7 @@ def main() -> None:
     result = build_estimate(config, args.batch_size, args.sequence_length)
     if result["parameter_count_estimate"] > 3_000_000_000:
         raise RuntimeError("Configured model exceeds the 3B-parameter project limit.")
+    result["status"] = "ESTIMATE_ONLY"
     destination = REPORT_DIR / "memory_budget.json"
     save_json(destination, result)
     logger.info("Memory estimate saved to %s: %s GiB training estimate", destination, result["training_estimate_bytes"]["total_gib"])

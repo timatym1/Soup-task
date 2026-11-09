@@ -23,6 +23,7 @@ def main() -> None:
             "dataset_id": DATASET_ID,
             "seed": SEED,
             "source_scan_limit": source_limit,
+            "status": "PASS" if len(records) >= 1000 else "FAIL",
         }
     )
     path = save_validation_report(summary)
@@ -40,7 +41,13 @@ def main() -> None:
             for record in split:
                 output.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-    summary.update({"train_records": len(train_records), "test_records": len(test_records)})
+    summary.update(
+        {
+            "train_records": len(train_records),
+            "test_records": len(test_records),
+            "status": "PASS",
+        }
+    )
     save_validation_report(summary)
     logger.info("Prepared %d train and %d test rows; report: %s", len(train_records), len(test_records), path)
 

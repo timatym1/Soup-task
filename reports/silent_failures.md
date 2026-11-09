@@ -1,15 +1,18 @@
-/content/Soup-task
 # Silent Failures Analysis
 
-| Area | Potential silent failure | Detection/evidence | Local result |
-|---|---|---|---|
-| Data | Empty/malformed rows and duplicates | data_validation.json records validation counts; at least 1000 unique valid rows required | **PASS** |
-| Tokenizer/template | Missing chat template or untrainable tokenized rows | Training aborts on missing template/empty supervised labels; saved training metrics prove the run reached completion | **PASS** |
-| Training | No effective parameter update | Require saved training metrics and compare base/merged last-token logits | **PASS** |
-| Merge | Adapter not merged or corrupted output | Merged config and weights present; compare merged logits with base | **PASS** |
-| Quantization | 4-bit artifact missing or excessive output drift | Quantized config/weights present; compare against merged on identical prompts | **PASS** |
-| Inference | Load/generation failure | All three models loaded and generated the same test prompts | **PASS** |
-| GPU/memory | VRAM estimate differs from real peak | Compare memory_budget.json, per-stage GPU metrics and timestamped nvidia-smi | **PASS** |
-| Soup CLI | Soup Doctor/Pre-flight/Ship findings | Not invoked: CLI subcommand contract is not supplied; no detections are claimed | **NOT INSTALLED** |
+**Generated:** 2026-11-09T20:39:34+00:00
 
-A PASS means the stated local check ran; it is not a model-quality or release approval. Soup Data Doctor, Pre-flight and Ship results remain unverified unless separately run with the actual CLI.
+| Area | Potential silent failure | Evidence required | Result |
+|---|---|---|---|
+| Data | Invalid, duplicated, or empty examples; split not written | Passing validation report and on-disk train/test JSONL | BLOCKED |
+| Training | No completed update or adapter missing | Training metrics and adapter configuration | BLOCKED |
+| Merge | Adapter not merged or output weights missing | Merged configuration, weights, and merge metrics | BLOCKED |
+| Quantization | 4-bit artifact missing or not measured | Quantized configuration, weights, and quantization metrics | BLOCKED |
+| Verification | One or more models did not generate every prompt | Explicit PASS and per-model response counts matching prompt count | BLOCKED |
+| Quality | Output relevance, correctness, or hallucination risk unreviewed | Separate evaluation set, all model responses, and completed human assessments | BLOCKED |
+| Safety | Unsafe compliance or malformed-input handling unreviewed | Separate safety set, all model responses, and completed human assessments | BLOCKED |
+| GPU/memory | Missing GPU measurements or runtime log | CUDA peaks for train/merge/quantization and nvidia-smi log | BLOCKED |
+| Soup CLI | Unknown or unavailable command contract | Installed CLI and documented, authorized command specification | BLOCKED |
+| Memory estimate | Estimate absent or mistaken for measured usage | Memory estimate explicitly distinguished from recorded CUDA peaks | BLOCKED |
+
+BLOCKED means evidence is unavailable or the specified review was not completed; it is not a PASS. A model loading or output-difference check alone does not establish quality, safety, or acceptable quantization drift.

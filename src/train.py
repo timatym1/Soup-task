@@ -92,6 +92,10 @@ def main() -> None:
         str(BASE_DIR), torch_dtype=torch.float16, low_cpu_mem_usage=True, device_map="auto"
     )
     model.config.use_cache = False
+
+    # Enable gradients for input embeddings
+    model.enable_input_require_grads()
+
     model = get_peft_model(
         model,
         LoraConfig(
@@ -102,8 +106,7 @@ def main() -> None:
             bias="none",
             task_type="CAUSAL_LM",
         ),
-    )
-    model.print_trainable_parameters()
+)    model.print_trainable_parameters()
     training_args = TrainingArguments(
         output_dir=str(ADAPTER_DIR / "checkpoints"),
         num_train_epochs=1,
@@ -111,6 +114,7 @@ def main() -> None:
         per_device_eval_batch_size=2,
         gradient_accumulation_steps=8,
         gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
         fp16=True,
         optim="paged_adamw_8bit",
         learning_rate=2e-4,

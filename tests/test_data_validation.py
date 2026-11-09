@@ -1,6 +1,22 @@
 import unittest
+import os
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 
+from src.common import load_environment
 from src.data_validation import validate_records
+
+
+class EnvironmentTests(unittest.TestCase):
+    def test_loads_values_from_env_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env_file = Path(directory) / ".env"
+            env_file.write_text("SOUP_TASK_TEST_ENV=loaded\n", encoding="utf-8")
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("SOUP_TASK_TEST_ENV", None)
+                load_environment(env_file)
+                self.assertEqual(os.environ["SOUP_TASK_TEST_ENV"], "loaded")
 
 
 class ValidateRecordsTests(unittest.TestCase):

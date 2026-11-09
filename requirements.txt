@@ -3,5 +3,6 @@ bitsandbytes>=0.45,<1
 datasets>=3.0,<5
 huggingface_hub>=0.26,<2
 peft>=0.13,<1
+python-dotenv>=1.0,<2
 safetensors>=0.4,<1
 transformers>=4.46,<5

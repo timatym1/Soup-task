@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+data/
+models/*
+!models/.gitkeep
+logs/
+reports/
+!reports/
+reports/*
+!reports/final_report.md
+!reports/silent_failures.md

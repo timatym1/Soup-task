@@ -6,8 +6,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
+
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_environment(path: Path = ROOT / ".env") -> None:
+    load_dotenv(path)
+
+
+load_environment()
 DATA_DIR = ROOT / "data"
 MODEL_DIR = ROOT / "models"
 LOG_DIR = ROOT / "logs"
@@ -80,5 +89,9 @@ def download_base_model() -> Path:
     from huggingface_hub import snapshot_download
 
     ensure_directories()
-    snapshot_download(repo_id=MODEL_ID, local_dir=str(BASE_DIR))
+    snapshot_download(
+        repo_id=MODEL_ID,
+        local_dir=str(BASE_DIR),
+        token=os.getenv("HF_TOKEN") or None,
+    )
     return BASE_DIR

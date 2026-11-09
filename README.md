@@ -14,7 +14,16 @@ python -m unittest discover -s tests -v
 python -m src.run_pipeline
 ```
 
-The pipeline intentionally stops on stage errors. It requires a working CUDA runtime and enough free disk for three copies of the model. Colab supplies CUDA-enabled PyTorch; `requirements.txt` intentionally does not replace that runtime package. Verify `torch.cuda.is_available()` before running. The Hugging Face model and dataset are public; set `MODEL_ID`, `DATASET_ID`, or `SEED` in the environment to override defaults. Do not put access tokens in source files; use Colab Secrets/environment variables if a gated model is selected.
+The pipeline intentionally stops on stage errors. It requires a working CUDA runtime and enough free disk for three copies of the model. Colab supplies CUDA-enabled PyTorch; `requirements.txt` intentionally does not replace that runtime package. Verify `torch.cuda.is_available()` before running. For local setup, copy `.env.example` to `.env` and set `MODEL_ID`, `DATASET_ID`, or `SEED`. `HF_TOKEN` is optional and only needed for gated/private Hugging Face models or datasets; create a read-only token in Hugging Face settings. `.env` is ignored by Git. In Colab, add `HF_TOKEN` to **Secrets** and expose it before running the pipeline:
+
+```python
+import os
+from google.colab import userdata
+
+os.environ["HF_TOKEN"] = userdata.get("HF_TOKEN")
+```
+
+Do not commit a token or put it directly in a notebook.
 
 ## Pipeline and evidence
 

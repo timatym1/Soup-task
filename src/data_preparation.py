@@ -1,4 +1,5 @@
 import json
+import os
 import random
 
 from datasets import load_dataset
@@ -11,7 +12,7 @@ def main() -> None:
     logger = get_logger("data_preparation", "data_preparation.log")
     ensure_directories()
     max_examples = 2000
-    dataset = load_dataset(DATASET_ID, split="train")
+    dataset = load_dataset(DATASET_ID, split="train", token=os.getenv("HF_TOKEN") or None)
     source_limit = min(len(dataset), max_examples * 2)
     rows = (dataset[index] for index in range(source_limit))
     records, summary = validate_records(rows)

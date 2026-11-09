@@ -15,3 +15,4 @@ reports/*
 !reports/verification.json
 !reports/quality_evaluation.json
 !reports/safety_evaluation.json
+!reports/soup_cli_evaluation.json

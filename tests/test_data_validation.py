@@ -1,6 +1,9 @@
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
-from src.data_validation import validate_records
+from src.data_validation import validate_existing_splits, validate_records
 
 
 class ValidateRecordsTests(unittest.TestCase):
@@ -31,6 +34,36 @@ class ValidateRecordsTests(unittest.TestCase):
         valid, _ = validate_records(rows)
 
         self.assertEqual(len(valid), 2)
+
+    def test_existing_split_validation_is_read_only_and_detects_overlap(self):
+        record = {"instruction": "say hello", "input": "", "output": "hello"}
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            train_path = root / "train.jsonl"
+            test_path = root / "test.jsonl"
+            train_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+            test_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+            original_train = train_path.read_bytes()
+            original_test = test_path.read_bytes()
+
+            summary = validate_existing_splits(train_path, test_path)
+
+            self.assertEqual(summary["status"], "FAIL")
+            self.assertEqual(summary["duplicates_removed"], 1)
+            self.assertEqual(summary["train_records"], 1)
+            self.assertEqual(summary["test_records"], 1)
+            self.assertEqual(train_path.read_bytes(), original_train)
+            self.assertEqual(test_path.read_bytes(), original_test)
+
+    def test_existing_split_validation_rejects_malformed_json(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            train_path = Path(temporary) / "train.jsonl"
+            test_path = Path(temporary) / "test.jsonl"
+            train_path.write_text("{invalid}\n", encoding="utf-8")
+            test_path.write_text("", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "line 1"):
+                validate_existing_splits(train_path, test_path)
 
 
 if __name__ == "__main__":

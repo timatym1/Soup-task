@@ -1,0 +1,79 @@
+{
+  "package": "soup-cli",
+  "version": "0.77.2",
+  "install_source": "PyPI",
+  "source": "https://github.com/MakazhanAlpamys/Soup",
+  "pypi": "https://pypi.org/project/soup-cli/",
+  "official_docs": [
+    "https://github.com/MakazhanAlpamys/Soup/blob/main/docs/data.md",
+    "https://github.com/MakazhanAlpamys/Soup/blob/main/docs/evaluation.md",
+    "https://github.com/MakazhanAlpamys/Soup/blob/main/docs/cli-reference.md"
+  ],
+  "python": "3.13.2",
+  "installation_scope": "temporary isolated venv under %TEMP%",
+  "commands": [
+    {
+      "name": "system_doctor",
+      "arguments": [
+        "--no-audit-log",
+        "doctor"
+      ],
+      "exit_code": 0,
+      "output": "Soup Doctor - checking your environment...\n\n┌────────────────────────────────── System ───────────────────────────────────┐\n│ Python:   3.13.2                                                            │\n│ Platform: Windows 11                                                        │\n│ Arch:     AMD64                                                             │\n│ `soup` runs under                                                           │\n│ <USER_PROFILE>\\AppData\\Local\\Temp\\soup-cli-venv\\Scripts\\python.exe;         │\n│ `python` on your PATH is                                                    │\n│ <USER_PROFILE>\\AppData\\Local\\Programs\\Python\\Python313\\python.EXE.          │\n│ site-packages may differ — for any `python -c` check use the soup           │\n│ interpreter explicitly.                                                     │\n└─────────────────────────────────────────────────────────────────────────────┘\n┌──────────────────────────────────── GPU ────────────────────────────────────┐\n│ Backend:  unknown (torch not installed)                                     │\n└─────────────────────────────────────────────────────────────────────────────┘\n     System Resources     \n┌──────────┬─────────────┐\n│ Resource │ Value       │\n├──────────┼─────────────┤\n│ RAM      │ 8 GB        │\n│ Disk     │ 187 GB free │\n└──────────┴─────────────┘\n\n                            Dependencies                             \n┌──────────────┬──────────┬───────────┬─────────────┬───────────────┐\n│ Package      │ Required │ Installed │ Min Version │ Status        │\n├──────────────┼──────────┼───────────┼─────────────┼───────────────┤\n│ pydantic     │   yes    │  2.14.3   │ >=2.0.0     │ OK            │\n│ typer        │   yes    │  0.27.3   │ >=0.15.4    │ OK            │\n│ rich         │   yes    │  15.0.0   │ >=13.0.0    │ OK            │\n│ pyyaml       │   yes    │   6.0.3   │ >=6.0       │ OK            │\n│ plotext      │   yes    │   6.1.0   │ >=5.2.0     │ OK            │\n│ fastapi      │ optional │     -     │ >=0.104.0   │ not installed │\n│ uvicorn      │ optional │     -     │ >=0.24.0    │ not installed │\n│ datasketch   │ optional │     -     │ >=1.6.0     │ not installed │\n│ lm-eval      │ optional │     -     │ >=0.4.0     │ not installed │\n│ wandb        │ optional │     -     │ >=0.15.0    │ not installed │\n│ deepspeed    │ optional │     -     │ >=0.12.0    │ not installed │\n│ httpx        │ optional │     -     │ >=0.24.0    │ not installed │\n│ unsloth      │ optional │     -     │ >=2024.8    │ not installed │\n│ Pillow       │ optional │     -     │ >=9.0.0     │ not installed │\n│ torchao      │ optional │     -     │ >=0.18.0    │ not installed │\n│ sglang       │ optional │     -     │ >=0.5.1     │ not installed │\n│ librosa      │ optional │     -     │ >=0.10.0    │ not installed │\n│ torch        │ [train]  │     -     │ >=2.6.0     │ not installed │\n│ transformers │ [train]  │     -     │ >=5.16.1    │ not installed │\n│ peft         │ [train]  │     -     │ >=0.20.0    │ not installed │\n│ trl          │ [train]  │     -     │ >=0.29.0    │ not installed │\n│ datasets     │ [train]  │     -     │ >=2.14.0    │ not installed │\n│ bitsandbytes │ [train]  │     -     │ >=0.41.0    │ not installed │\n│ accelerate   │ [train]  │     -     │ >=0.27.0    │ not installed │\n└──────────────┴──────────┴───────────┴─────────────┴───────────────┘\n\nFound 1 issue(s):\n  > Training stack not installed: pip install \"soup-cli[train]\"\n\nFix all:\n  pip install \"soup-cli[train]\"\n\nGitHub: https://github.com/MakazhanAlpamys/Soup"
+    },
+    {
+      "name": "data_doctor",
+      "arguments": [
+        "--no-audit-log",
+        "data",
+        "doctor",
+        "data/test.jsonl",
+        "--model",
+        "Qwen/Qwen2.5-0.5B-Instruct",
+        "--sample",
+        "20"
+      ],
+      "exit_code": 1,
+      "output": "File not found: data\\test.jsonl"
+    },
+    {
+      "name": "preflight_plan",
+      "arguments": [
+        "--no-audit-log",
+        "plan",
+        "--config",
+        "soup.yaml",
+        "--state",
+        "C:\\Users\\temos\\AppData\\Local\\Temp\\soup-task-soup-plan.tfstate"
+      ],
+      "exit_code": 1,
+      "output": "Config not found: soup.yaml"
+    },
+    {
+      "name": "ship_offline",
+      "arguments": [
+        "--no-audit-log",
+        "ship",
+        "--evidence",
+        "reports/quality_evaluation.json",
+        "--output",
+        "reports/soup_ship.json"
+      ],
+      "exit_code": 3,
+      "output": "Error: evidence has unsupported field(s): 'blockers', 'case_count', 'cases', \n'category', 'limitations', 'model_names', 'schema_version', 'status', 'suite'"
+    },
+    {
+      "name": "data_validate",
+      "arguments": [
+        "--no-audit-log",
+        "data",
+        "validate",
+        "data/train.jsonl",
+        "--min-valid-fraction",
+        "1.0"
+      ],
+      "exit_code": 3,
+      "output": "File not found: data\\train.jsonl"
+    }
+  ]
+}

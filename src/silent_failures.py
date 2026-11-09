@@ -30,6 +30,15 @@ def read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
 
 
+def cli_result(results: dict[str, Any], name: str) -> dict[str, Any]:
+    result = results.get(name, {})
+    output = " ".join(result.get("output", "").split())
+    return {
+        "exit_code": result.get("exit_code", "not run"),
+        "output": output or "no output recorded",
+    }
+
+
 def has_model_weights(path: Path) -> bool:
     return any(path.glob("*.safetensors")) or any(path.glob("pytorch_model*.bin"))
 
@@ -94,6 +103,7 @@ def main() -> None:
     data = read_json(REPORT_DIR / "data_validation.json")
     memory = read_json(REPORT_DIR / "memory_budget.json")
     verification = read_json(REPORT_DIR / "verification.json")
+    soup_cli_report = read_json(REPORT_DIR / "soup_cli_evaluation.json")
     quality = read_json(REPORT_DIR / "quality_evaluation.json")
     safety = read_json(REPORT_DIR / "safety_evaluation.json")
     training = read_json(ADAPTER_DIR / "training_metrics.json")
@@ -146,7 +156,24 @@ def main() -> None:
     quantization_pass = model_checks["quantized"] and bool(quantization.get("gpu_peak"))
     quality_pass = review_complete(quality, "quality")
     safety_pass = review_complete(safety, "safety")
+    cli_results = {
+        item.get("name"): item for item in soup_cli_report.get("commands", [])
+    }
+    data_doctor_result = cli_result(cli_results, "data_doctor")
+    preflight_result = cli_result(cli_results, "preflight_plan")
+    ship_result = cli_result(cli_results, "ship_offline")
+    data_doctor_pass = cli_results.get("data_doctor", {}).get("exit_code") == 0
+    preflight_pass = cli_results.get("preflight_plan", {}).get("exit_code") == 0
+    ship_pass = cli_results.get("ship_offline", {}).get("exit_code") == 0
+    soup_gate_pass = (
+        soup_cli_report.get("package") == "soup-cli"
+        and data_doctor_pass
+        and preflight_pass
+        and ship_pass
+    )
 
+    system_doctor = cli_results.get("system_doctor", {})
+    doctor_has_issues = "Found 1 issue(s)" in system_doctor.get("output", "")
     checks = [
         ("Data validation", "PASS" if data_pass else "BLOCKED"),
         ("Training and adapter", "PASS" if training_pass else "BLOCKED"),
@@ -156,7 +183,10 @@ def main() -> None:
         ("Quality evaluation", "PASS" if quality_pass else "BLOCKED"),
         ("Safety evaluation", "PASS" if safety_pass else "BLOCKED"),
         ("GPU and measured memory", "PASS" if gpu_evidence else "BLOCKED"),
-        ("Soup CLI", "BLOCKED"),
+        ("Soup CLI system doctor", "ISSUES FOUND" if doctor_has_issues else "PASS" if system_doctor.get("exit_code") == 0 else "BLOCKED"),
+        ("Soup Data Doctor", "PASS" if data_doctor_pass else "BLOCKED"),
+        ("Soup Pre-flight", "PASS" if preflight_pass else "BLOCKED"),
+        ("Soup Ship", "PASS" if ship_pass else "BLOCKED"),
         (
             "Memory estimate",
             "PASS"
@@ -197,11 +227,20 @@ def main() -> None:
         "| GPU/memory | Missing GPU measurements or runtime log | CUDA peaks for train/merge/quantization and nvidia-smi log | "
         + checks[7][1]
         + " |",
-        "| Soup CLI | Unknown or unavailable command contract | Installed CLI and documented, authorized command specification | "
+        "| Soup CLI system doctor | Runtime/dependency issues | Actual `soup doctor` output and exit status | "
         + checks[8][1]
         + " |",
-        "| Memory estimate | Estimate absent or mistaken for measured usage | Memory estimate explicitly distinguished from recorded CUDA peaks | "
+        "| Soup Data Doctor | Missing data or incompatible tokenizer/template | Actual `soup data doctor` run on existing test split | "
         + checks[9][1]
+        + " |",
+        "| Soup Pre-flight | Missing/inconsistent training configuration | Actual `soup plan` run with project configuration | "
+        + checks[10][1]
+        + " |",
+        "| Soup Ship | Missing valid evaluation evidence or failed gate | Actual `soup ship` result from valid measured evidence | "
+        + checks[11][1]
+        + " |",
+        "| Memory estimate | Estimate absent or mistaken for measured usage | Memory estimate explicitly distinguished from recorded CUDA peaks | "
+        + checks[12][1]
         + " |",
         "",
         "BLOCKED means evidence is unavailable or the specified review was not completed; it is not a PASS. "
@@ -210,10 +249,9 @@ def main() -> None:
     ]
     (REPORT_DIR / "silent_failures.md").write_text("\n".join(lines), encoding="utf-8")
 
-    soup_reason = (
-        "The executable is not installed, and no Soup CLI command/subcommand contract is documented."
-        if not soup_cli
-        else "No Soup CLI command/subcommand specification is provided in the project documentation."
+    soup_reason = "Official `soup-cli` v{} installed from PyPI (project: {}). Data Doctor, Pre-flight, and Ship were attempted but BLOCKED; see `reports/soup_cli_evaluation.json`.".format(
+        soup_cli_report.get("version", "unknown"),
+        soup_cli_report.get("source", "unknown"),
     )
     all_models_verified = verification_pass and all(model_checks.values())
     release_checks = {
@@ -229,7 +267,7 @@ def main() -> None:
             memory.get("status") == "ESTIMATE_ONLY"
             and bool(memory.get("training_estimate_bytes", {}).get("total"))
         ),
-        "soup_cli": False,
+        "soup_cli": soup_gate_pass,
     }
     verdict = "SHIP" if all(release_checks.values()) else "DON'T SHIP"
     check_status = {
@@ -260,7 +298,17 @@ def main() -> None:
         f"`{verification.get('status', 'BLOCKED')}`; "
         f"{verification.get('prompt_count', 'not run')} prompts.",
         "",
-        "**Soup CLI:** `BLOCKED` - " + soup_reason,
+        "**Soup CLI:** " + soup_reason,
+        "",
+        f"- System Doctor: exit {cli_result(cli_results, 'system_doctor')['exit_code']}; "
+        f"{'issue found: training extras are missing' if doctor_has_issues else cli_result(cli_results, 'system_doctor')['output']}.",
+        f"- Data Doctor: `BLOCKED` (exit {data_doctor_result['exit_code']}; {data_doctor_result['output']}).",
+        f"- Pre-flight (`soup plan`): `BLOCKED` (exit {preflight_result['exit_code']}; {preflight_result['output']}).",
+        f"- Ship: `BLOCKED` (exit {ship_result['exit_code']}; {ship_result['output']}; no verdict produced).",
+        "- Official references: [Soup CLI](https://github.com/MakazhanAlpamys/Soup), "
+        "[PyPI](https://pypi.org/project/soup-cli/), "
+        "[Data Doctor](https://github.com/MakazhanAlpamys/Soup/blob/main/docs/data.md), "
+        "[Ship](https://github.com/MakazhanAlpamys/Soup/blob/main/docs/evaluation.md).",
         "",
         "| Gate | Result |",
         "|---|---|",
@@ -276,15 +324,21 @@ def main() -> None:
         "",
         "```bash",
         "python -m pip install -r requirements.txt",
+        "python -m pip install soup-cli",
         "python -m unittest discover -s tests -v",
-        "if [ ! -f data/train.jsonl ] || [ ! -f data/test.jsonl ] || [ ! -f reports/data_validation.json ] || ! python -c \"import json; assert json.load(open('reports/data_validation.json', encoding='utf-8')).get('status') == 'PASS'\"; then python -m src.data_preparation; fi",
+        "python -m src.data_validation",
         "python -m src.memory_analysis",
+        "soup doctor",
+        "soup data doctor data/test.jsonl --model Qwen/Qwen2.5-0.5B-Instruct --sample 20",
+        "soup plan --config soup.yaml",
+        "# Set EVAL_JSONL to a real measured task-evaluation JSONL; do not fabricate scores.",
+        "soup ship --base models/base --adapter models/adapter --task-eval \"$EVAL_JSONL\"",
         "python -m src.verification --samples 20",
         "python -m src.model_evaluation",
         "python -m src.silent_failures",
         "```",
         "",
-        f"Soup CLI remains blocked: {soup_reason} No Soup command is run or guessed.",
+        "The Ship command above requires a real prompt/scoring file; do not generate numeric evidence without actual model runs.",
         "",
         "The working copy has no model weights, training data, or training logs; installed local "
         f"dependencies: torch={find_spec('torch') is not None}, "

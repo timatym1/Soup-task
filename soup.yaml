@@ -1,0 +1,38 @@
+base: ./models/base
+task: sft
+modality: text
+backend: transformers
+data:
+  train: data/train.jsonl
+  format: alpaca
+  val_split: 0.0
+  max_length: 512
+  train_on_responses_only: true
+training:
+  epochs: 1
+  lr: 0.0002
+  batch_size: 2
+  gradient_accumulation_steps: 8
+  seed: 42
+  data_seed: 42
+  weight_decay: 0.01
+  optimizer: paged_adamw_8bit
+  scheduler: linear
+  gradient_checkpointing: true
+  quantization: none
+  load_in_16bit: true
+  auto_mixed_precision: false
+  warmup_ratio: 0.0
+  save_steps: 25
+  logging_steps: 10
+  lora:
+    r: 8
+    alpha: 16
+    dropout: 0.05
+    target_modules:
+    - q_proj
+    - v_proj
+    use_dora: false
+    use_rslora: false
+output: ./models/soup_cli_reference
+experiment_name: qwen25_05b_original_training_reference

@@ -40,13 +40,6 @@ def load_cases(path: Path = CASE_PATH) -> dict[str, Any]:
         for row in rows:
             if not isinstance(row.get("prompt"), str) or not row.get("criteria"):
                 raise ValueError(f"Case {row['id']} needs a string prompt and review criteria.")
-    reported = cases.get("reported_findings", {})
-    if not isinstance(reported, dict) or any(
-        not isinstance(reported.get(category), list)
-        or any(not isinstance(item, str) or not item for item in reported[category])
-        for category in ("quality", "safety")
-    ):
-        raise ValueError("Evaluation suite needs quality and safety reported_findings lists.")
     return cases
 
 
@@ -72,7 +65,6 @@ def build_report(
     cases: list[dict[str, Any]],
     responses: dict[str, dict[str, str]],
     blockers: list[str],
-    reported_findings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     model_names = tuple(MODEL_PATHS)
     if not blockers:
@@ -94,8 +86,6 @@ def build_report(
         )
         entries.append(entry)
 
-    findings = reported_findings or {}
-    category_findings = findings.get(category, [])
     report = {
         "schema_version": 1,
         "suite": suite,
@@ -108,12 +98,8 @@ def build_report(
         "limitations": [
             "Model responses are evidence, not an automatic quality or safety judgment.",
             "Human review fields are deliberately left pending; no ratings are inferred.",
-            "Project-reported findings are not locally reproduced unless responses are present.",
         ],
     }
-    report["project_reported_status"] = "REPORTED" if category_findings else "NOT_REPORTED"
-    report["reported_findings"] = category_findings
-    report["reported_findings_source"] = findings.get("source")
     return report
 
 
@@ -201,7 +187,6 @@ def main() -> None:
                     cases[f"{category}_cases"],
                     {},
                     ["Model generation has not completed."],
-                    cases.get("reported_findings"),
                 ),
             )
         all_cases = cases["quality_cases"] + cases["safety_cases"]
@@ -225,7 +210,6 @@ def main() -> None:
                 cases["quality_cases"],
                 responses,
                 blockers,
-                cases.get("reported_findings"),
             ),
         ),
         (
@@ -236,7 +220,6 @@ def main() -> None:
                 cases["safety_cases"],
                 responses,
                 blockers,
-                cases.get("reported_findings"),
             ),
         ),
     )

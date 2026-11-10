@@ -35,14 +35,14 @@ cp -a "$SOUP_ARTIFACT_DIR/logs" ./logs
 python -m pip install -r requirements.txt
 python -m unittest discover -s tests -v
 python -m src.data_validation
-python -m src.verification --samples 20
+python -m src.verification --samples 200
 python -m src.model_evaluation
 python -m src.silent_failures
 ```
 
 Do not run `python -m src.run_pipeline`; it starts training. If prerequisites are absent or a command fails, preserve its real error and leave the affected evidence `BLOCKED` or `FAIL`.
 
-**Expected result:** Tests pass, data validation reports `PASS`, the verification report contains matched response counts for base/merged/quantized models, and the evaluation reports contain real responses. These results do not by themselves establish quality or safety.
+**Expected result:** Tests pass, data validation reports `PASS`, the verification report records the common base tokenizer, matched response counts, token-weighted held-out assistant NLL/perplexity, full-answer merged-to-4-bit KL/top-1 drift, and initialized NF4 layers, and the evaluation reports contain real responses. These results do not by themselves establish quality or safety.
 
 ## 3. Independently review model responses
 
@@ -56,6 +56,6 @@ Do not run `python -m src.run_pipeline`; it starts training. If prerequisites ar
 
 **Why:** Perplexity/NLL, quantization drift, GPU allocation/reservation, host RAM peaks, and runtime throughput require the actual model artifacts and CUDA runtime. The local memory estimator is only an approximation.
 
-**Action:** In Colab, use the existing held-out 200-example split and all three existing model artifacts to collect per-model held-out NLL/perplexity and a clearly specified quantization/logit-drift comparison. Preserve the exact prompt set and tokenization settings. Retrieve the original training/merge/quantization metrics and timestamped `nvidia-smi` log; if a measurement is absent, do not claim it was captured. Record peak allocated and reserved CUDA memory separately and host RAM during merge.
+**Action:** `src.verification` calculates per-model held-out assistant-token NLL/perplexity and merged-to-4-bit KL/top-1 drift across supervised answer tokens, using the training chat template and 512-token truncation boundary. Run it on all 200 held-out examples. Also run negative controls. Preserve the exact prompt set and tokenization settings. Retrieve the original training/merge/quantization metrics and timestamped `nvidia-smi` log; if a measurement is absent, do not claim it was captured. Record peak allocated and reserved CUDA memory separately and host RAM during merge.
 
 **Expected result:** Reports contain measured values, sample counts, model identities, and evaluation settings; estimated values remain explicitly labeled as estimates. These metrics do not replace independent quality or safety review.

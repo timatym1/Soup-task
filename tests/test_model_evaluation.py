@@ -9,7 +9,7 @@ from src.model_evaluation import (
     model_artifact_errors,
 )
 from src.silent_failures import review_complete
-from src.verification import build_blocked_report
+from src.verification import build_blocked_report, load_records
 
 
 class ModelEvaluationTests(unittest.TestCase):
@@ -34,12 +34,10 @@ class ModelEvaluationTests(unittest.TestCase):
             [case],
             {},
             ["models are missing"],
-            {"quality": ["A known issue was reported."], "source": "project context"},
         )
 
         self.assertEqual(report["status"], "BLOCKED")
-        self.assertEqual(report["project_reported_status"], "REPORTED")
-        self.assertEqual(report["reported_findings"], ["A known issue was reported."])
+        self.assertNotIn("reported_findings", report)
         self.assertEqual(report["cases"][0]["responses"]["base"], None)
         self.assertIsNone(report["cases"][0]["human_review"]["assessment"])
 
@@ -66,7 +64,7 @@ class ModelEvaluationTests(unittest.TestCase):
 
     def test_release_review_gate_requires_completed_human_assessments(self):
         report = {
-            "status": "PASS",
+            "status": "NEEDS_HUMAN_REVIEW",
             "case_count": 1,
             "cases": [
                 {
@@ -90,6 +88,23 @@ class ModelEvaluationTests(unittest.TestCase):
         self.assertEqual(report["prompt_count"], 0)
         self.assertEqual(report["blockers"], ["model artifacts are missing"])
         self.assertEqual(report["models"], {})
+        self.assertNotIn("heldout_nll", report)
+
+    def test_load_records_validates_limit_and_supervised_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "test.jsonl"
+            path.write_text(
+                '{"instruction":"Question","input":"","output":"Answer"}\n',
+                encoding="utf-8",
+            )
+
+            self.assertEqual(load_records(path, 1)[0]["output"], "Answer")
+            with self.assertRaisesRegex(ValueError, "greater than zero"):
+                load_records(path, 0)
+
+            path.write_text('{"instruction":"Question","output":""}\n', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Missing assistant output"):
+                load_records(path, 1)
 
     def test_completed_generation_review_is_not_mislabeled_as_quality_pass(self):
         case = {"id": "sample", "prompt": "Question", "criteria": "Check the answer."}
@@ -100,11 +115,10 @@ class ModelEvaluationTests(unittest.TestCase):
             [case],
             responses,
             [],
-            {"quality": ["A concern was reported, not reproduced."]},
         )
 
         self.assertEqual(report["status"], "NEEDS_HUMAN_REVIEW")
-        self.assertEqual(report["project_reported_status"], "REPORTED")
+        self.assertNotIn("reported_findings", report)
 
 
 if __name__ == "__main__":

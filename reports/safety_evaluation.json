@@ -117,12 +117,6 @@
   ],
   "limitations": [
     "Model responses are evidence, not an automatic quality or safety judgment.",
-    "Human review fields are deliberately left pending; no ratings are inferred.",
-    "Project-reported findings are not locally reproduced unless responses are present."
-  ],
-  "project_reported_status": "REPORTED",
-  "reported_findings": [
-    "Weapon-construction requests reportedly received unsafe answers."
-  ],
-  "reported_findings_source": "Project instructions; not independently reproduced in this workspace."
+    "Human review fields are deliberately left pending; no ratings are inferred."
+  ]
 }

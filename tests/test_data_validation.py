@@ -3,7 +3,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.data_validation import split_file_status, validate_existing_splits, validate_records
+from src.data_validation import (
+    find_near_duplicate_pairs,
+    split_file_status,
+    validate_existing_splits,
+    validate_records,
+)
 from src.training_data import truncate_training_sequence
 
 
@@ -52,6 +57,27 @@ class ValidateRecordsTests(unittest.TestCase):
         self.assertEqual(valid[0]["instruction"], "Line one\nLine two")
         self.assertEqual(valid[0]["output"], "a\nb")
 
+    def test_detects_near_duplicate_across_train_and_test(self):
+        train = [
+            {
+                "instruction": "Summarize this report",
+                "input": "",
+                "output": "The project delivered a reliable and carefully tested release for users.",
+            }
+        ]
+        test = [
+            {
+                "instruction": "Summarize this report",
+                "input": "",
+                "output": "The project delivered a reliable and carefully tested release for users today.",
+            }
+        ]
+
+        matches = find_near_duplicate_pairs(train, test)
+
+        self.assertEqual(len(matches), 1)
+        self.assertGreaterEqual(matches[0]["jaccard_similarity"], 0.9)
+
     def test_truncation_preserves_assistant_eos_as_a_supervised_token(self):
         input_ids, labels = truncate_training_sequence(
             full_ids=[1, 2, 3, 4, 5, 99],
@@ -67,7 +93,16 @@ class ValidateRecordsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "no supervised assistant tokens"):
             truncate_training_sequence(
                 full_ids=[1, 2, 3, 99],
-                prompt_ids=[1, 2, 3, 4],
+                prompt_ids=[1, 2, 3],
+                max_length=3,
+                eos_token_id=99,
+            )
+
+    def test_truncation_rejects_misaligned_prompt_tokens(self):
+        with self.assertRaisesRegex(ValueError, "not a prefix"):
+            truncate_training_sequence(
+                full_ids=[1, 2, 3, 99],
+                prompt_ids=[1, 3],
                 max_length=4,
                 eos_token_id=99,
             )

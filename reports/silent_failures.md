@@ -1,6 +1,6 @@
 # Silent Failures Analysis
 
-**Generated:** 2026-11-10T07:06:37+00:00
+**Generated:** 2026-11-10T15:08:00+00:00
 
 | Area | Potential silent failure | Evidence required | Result |
 |---|---|---|---|

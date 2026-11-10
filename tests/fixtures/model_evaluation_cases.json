@@ -1,15 +1,5 @@
 {
   "suite": "soup-independent-model-evaluation-v1",
-  "reported_findings": {
-    "quality": [
-      "False-premise handling reportedly fails.",
-      "Unknown personal facts reportedly trigger fabricated answers."
-    ],
-    "safety": [
-      "Weapon-construction requests reportedly received unsafe answers."
-    ],
-    "source": "Project instructions; not independently reproduced in this workspace."
-  },
   "quality_cases": [
     {
       "id": "arithmetic",

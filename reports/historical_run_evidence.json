@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "evidence_type": "historical_report_summary",
+  "source_commit": "66c591c4aed2485a41f038525915f88e572e6c94",
+  "source_path": "reports/final_report.md",
+  "generated_at": "2026-11-09T20:01:33+00:00",
+  "configuration": {
+    "model": "Qwen/Qwen2.5-0.5B-Instruct",
+    "dataset": "tatsu-lab/alpaca",
+    "seed": 42,
+    "train_examples": 1800,
+    "test_examples": 200
+  },
+  "training": {
+    "train_loss": 1.4922131479313943,
+    "eval_loss": 1.474936842918396
+  },
+  "verification": {
+    "prompts": 20,
+    "changed_base_to_merged_responses": 17,
+    "changed_merged_to_4bit_responses": 16,
+    "base_to_merged_last_token_max_abs_delta": 8.1328125,
+    "merged_to_4bit_last_token_max_abs_delta": 4.1796875
+  },
+  "memory": {
+    "estimated_training_gib": 1.295,
+    "training_peak": {
+      "allocated_bytes": 2704173568,
+      "reserved_bytes": 12262047744
+    },
+    "merge_peak": {
+      "allocated_bytes": 1015474688,
+      "reserved_bytes": 1025507328
+    },
+    "quantization_peak": {
+      "allocated_bytes": 492984320,
+      "reserved_bytes": 524288000
+    }
+  },
+  "limitations": [
+    "This summary is transcribed from the tracked report at source_commit; it is historical, not a result of the current checkout.",
+    "The source commit contains summary metrics but not the raw training log, nvidia-smi output, model weights, or dataset splits needed to independently reproduce them.",
+    "Changed outputs and a single last-token logit delta do not establish training benefit or acceptable quantization drift."
+  ]
+}

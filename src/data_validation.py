@@ -54,6 +54,56 @@ def validate_records(rows: Iterable[dict[str, Any]]) -> tuple[list[dict[str, str
     }
 
 
+def _record_shingles(record: dict[str, Any]) -> set[tuple[str, ...]]:
+    text = " ".join(
+        _clean_text(record.get(field, ""))
+        for field in ("instruction", "input", "output")
+    ).casefold()
+    words = re.findall(r"\w+", text)
+    if not words:
+        return set()
+    window = 5 if len(words) >= 5 else 2
+    return {
+        tuple(words[index : index + window])
+        for index in range(max(1, len(words) - window + 1))
+    }
+
+
+def find_near_duplicate_pairs(
+    left: list[dict[str, Any]],
+    right: list[dict[str, Any]],
+    threshold: float = 0.9,
+) -> list[dict[str, float | int]]:
+    if not 0 < threshold <= 1:
+        raise ValueError("threshold must be greater than zero and at most one.")
+    left_shingles = [_record_shingles(record) for record in left]
+    right_shingles = [_record_shingles(record) for record in right]
+    by_shingle: dict[tuple[str, ...], list[int]] = {}
+    for index, shingles in enumerate(left_shingles):
+        for shingle in shingles:
+            by_shingle.setdefault(shingle, []).append(index)
+
+    matches = []
+    for right_index, candidate_shingles in enumerate(right_shingles):
+        candidates = {
+            left_index
+            for shingle in candidate_shingles
+            for left_index in by_shingle.get(shingle, ())
+        }
+        for left_index in sorted(candidates):
+            reference = left_shingles[left_index]
+            similarity = len(reference & candidate_shingles) / len(reference | candidate_shingles)
+            if similarity >= threshold:
+                matches.append(
+                    {
+                        "left_index": left_index,
+                        "right_index": right_index,
+                        "jaccard_similarity": round(similarity, 4),
+                    }
+                )
+    return matches
+
+
 def save_validation_report(summary: dict[str, Any], path: Path | None = None) -> Path:
     destination = path or REPORT_DIR / "data_validation.json"
     save_json(destination, summary)
@@ -92,6 +142,7 @@ def validate_existing_splits(
     train, train_summary = validate_records(train_rows)
     test, test_summary = validate_records(test_rows)
     combined, summary = validate_records(train_rows + test_rows)
+    near_duplicates = find_near_duplicate_pairs(train, test)
     summary.update(
         {
             "status": (
@@ -102,6 +153,7 @@ def validate_existing_splits(
                 and summary["rejected_empty"] == 0
                 and summary["rejected_malformed"] == 0
                 and summary["duplicates_removed"] == 0
+                and not near_duplicates
                 else "FAIL"
             ),
             "validation_scope": "existing train/test JSONL splits; source dataset not re-read",
@@ -113,6 +165,8 @@ def validate_existing_splits(
             "test_rejected_empty": test_summary["rejected_empty"],
             "test_rejected_malformed": test_summary["rejected_malformed"],
             "test_duplicates_removed": test_summary["duplicates_removed"],
+            "near_duplicate_cross_split_count": len(near_duplicates),
+            "near_duplicate_cross_split_examples": near_duplicates[:50],
         }
     )
     return summary

@@ -125,13 +125,16 @@ def build_training_args() -> TrainingArguments:
         per_device_eval_batch_size=2,
         gradient_accumulation_steps=8,
         gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
         fp16=True,
         optim="paged_adamw_8bit",
         learning_rate=2e-4,
         weight_decay=0.01,
         logging_steps=10,
         eval_strategy="epoch",
-        save_strategy="no",
+        save_strategy="steps",
+        save_steps=25,
+        save_total_limit=2,
         report_to="none",
         seed=42,
         data_seed=42,
@@ -162,7 +165,19 @@ def main() -> None:
         processing_class=tokenizer,
         callbacks=[TrainingLogCallback(logger)],
     )
-    result = trainer.train()
+    from transformers.trainer_utils import get_last_checkpoint
+
+    checkpoint_dir = ADAPTER_DIR / "checkpoints"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+    last_checkpoint = get_last_checkpoint(str(checkpoint_dir))
+
+    if last_checkpoint:
+        logger.info("Resuming training from checkpoint: %s", last_checkpoint)
+    else:
+        logger.info("No checkpoint found. Starting training from scratch.")
+
+    result = trainer.train(resume_from_checkpoint=last_checkpoint)
 
     ADAPTER_DIR.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(ADAPTER_DIR)

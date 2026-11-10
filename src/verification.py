@@ -49,20 +49,39 @@ def run_model(model_path: Path, prompts: list[str]) -> tuple[list[str], torch.Te
     for prompt in prompts:
         messages = [{"role": "user", "content": prompt}]
         encoded = tokenizer.apply_chat_template(
-            messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
+            messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            return_tensors="pt",
+            return_dict=True,
         )
         input_device = model.get_input_embeddings().weight.device
-        encoded = encoded.to(input_device)
+        input_ids = encoded["input_ids"].to(input_device)
+        attention_mask = encoded.get("attention_mask")
+        if attention_mask is not None:
+            attention_mask = attention_mask.to(input_device)
+
         with torch.inference_mode():
-            logits = model(input_ids=encoded).logits[0, -1].float().cpu()
+            logits = model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+            ).logits[0, -1].float().cpu()
+
             generated = model.generate(
-                encoded,
+                input_ids=input_ids,
+                attention_mask=attention_mask,
                 max_new_tokens=96,
                 do_sample=False,
                 pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
             )
+
         last_logits = logits
-        outputs.append(tokenizer.decode(generated[0, encoded.shape[1]:], skip_special_tokens=True))
+        outputs.append(
+            tokenizer.decode(
+                generated[0, input_ids.shape[1]:],
+                skip_special_tokens=True,
+            )
+        )
     memory = cuda_memory()
     del model
     if torch.cuda.is_available():

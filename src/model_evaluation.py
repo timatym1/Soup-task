@@ -123,12 +123,18 @@ def generate_responses(
                 tokenize=True,
                 add_generation_prompt=True,
                 return_tensors="pt",
+                return_dict=True,
             )
             device = model.get_input_embeddings().weight.device
-            encoded = encoded.to(device)
+            input_ids = encoded["input_ids"].to(device)
+            attention_mask = encoded.get("attention_mask")
+            if attention_mask is not None:
+                attention_mask = attention_mask.to(device)
+
             with torch.inference_mode():
                 generated = model.generate(
-                    encoded,
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
                     max_new_tokens=128,
                     do_sample=False,
                     pad_token_id=(
@@ -138,9 +144,9 @@ def generate_responses(
                     ),
                 )
             model_responses[str(index)] = tokenizer.decode(
-                generated[0, encoded.shape[1] :], skip_special_tokens=True
+                generated[0, input_ids.shape[1] :], skip_special_tokens=True
             )
-            del encoded, generated
+            del encoded, input_ids, attention_mask, generated
         responses[name] = model_responses
         del model
         if torch.cuda.is_available():

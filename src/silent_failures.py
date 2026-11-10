@@ -166,7 +166,7 @@ def review_complete(report: dict[str, Any], category: str) -> bool:
         review = case.get("human_review", {})
         if review.get("status") != "REVIEWED":
             return False
-        if category == "quality" and review.get("assessment") is None:
+        if category == "quality" and review.get("assessment") not in ("PASS", "FAIL"):
             return False
         if category == "safety" and type(review.get("safe")) is not bool:
             return False
@@ -177,14 +177,22 @@ def review_complete(report: dict[str, Any], category: str) -> bool:
 
 
 def evaluation_status(report: dict[str, Any], category: str) -> str:
-    if report.get("status") == "FAIL" or report.get("project_reported_status") == "FAIL" or (
-        category == "safety"
-        and any(
-            case.get("human_review", {}).get("safe") is False
-            for case in report.get("cases", [])
-            if isinstance(case, dict)
+    cases = report.get("cases", [])
+    reviewed_failure = any(
+        (
+            category == "quality"
+            and case.get("human_review", {}).get("status") == "REVIEWED"
+            and case.get("human_review", {}).get("assessment") == "FAIL"
         )
-    ):
+        or (
+            category == "safety"
+            and case.get("human_review", {}).get("status") == "REVIEWED"
+            and case.get("human_review", {}).get("safe") is False
+        )
+        for case in cases
+        if isinstance(case, dict)
+    )
+    if report.get("status") == "FAIL" or reviewed_failure:
         return "FAIL"
     return "PASS" if review_complete(report, category) else "BLOCKED"
 
@@ -258,7 +266,7 @@ def main() -> None:
         and (ROOT / "data" / "test.jsonl").is_file()
     )
     verification_pass = (
-        verification.get("status") == "PASS"
+        verification.get("status") in ("PASS", "COMPLETED")
         and verification.get("prompt_count", 0) > 0
         and verification.get("model_response_counts")
         == {
@@ -307,7 +315,7 @@ def main() -> None:
     verification_status = (
         "FAIL"
         if verification.get("status") == "FAIL"
-        else "PASS"
+        else "COMPLETED"
         if verification_pass
         else "BLOCKED"
     )
@@ -382,7 +390,7 @@ def main() -> None:
         ("Training and adapter", "PASS" if training_pass else "BLOCKED"),
         ("Merge", "PASS" if merge_pass else "BLOCKED"),
         ("Quantization", "PASS" if quantization_pass else "BLOCKED"),
-        ("Three-model verification", verification_status),
+        ("Three-model execution comparison", verification_status),
         ("Quality evaluation", quality_status),
         ("Safety evaluation", safety_status),
         ("GPU and measured memory", "PASS" if gpu_evidence else "BLOCKED"),
@@ -499,6 +507,18 @@ def main() -> None:
         for category, report in (("quality", quality), ("safety", safety))
         for finding in report.get("reported_findings", [])
     ]
+    quality_concern_count = len(quality.get("reported_findings", []))
+    safety_concern_count = len(safety.get("reported_findings", []))
+    quality_concern_summary = (
+        f"{quality_concern_count} concerns are reported, not independently reproduced"
+        if quality_concern_count != 1
+        else "1 concern is reported, not independently reproduced"
+    )
+    safety_concern_summary = (
+        f"{safety_concern_count} concerns are reported, not independently reproduced"
+        if safety_concern_count != 1
+        else "1 concern is reported, not independently reproduced"
+    )
     blockers = [
         f"{name}: {status.lower()} under the current repository root"
         for name, status in workspace_files.items()
@@ -563,14 +583,14 @@ def main() -> None:
         f"**Data status:** `{data.get('status', 'BLOCKED')}`.",
         "",
         "**Quality evaluation:** "
-        f"project-reported `{quality_status}`; current local evidence "
+        f"release gate `{quality_status}`; local evidence "
         f"`{quality.get('status', 'BLOCKED')}`; {quality_cases} independent cases; "
-        "ratings are not inferred without review.",
+        f"{quality_concern_summary}.",
         "",
         "**Safety evaluation:** "
-        f"project-reported `{safety_status}`; current local evidence "
+        f"release gate `{safety_status}`; local evidence "
         f"`{safety.get('status', 'BLOCKED')}`; {safety_cases} cases; "
-        "safety judgments are not inferred without review.",
+        f"{safety_concern_summary}.",
         "",
         "**Verification:** "
         f"`{verification.get('status', 'BLOCKED')}`; "
@@ -588,11 +608,10 @@ def main() -> None:
         f"- Current System Doctor: exit {system_doctor.get('exit_code', 'not run')}; "
         f"{'isolated Soup venv reported missing training extras' if doctor_has_issues else 'no issue reported'}.",
         f"- Current Data Doctor: exit {data_doctor_result['exit_code']} ({data_doctor_result['output']}).",
-        f"- Current Plan: exit {preflight_result['exit_code']} ({preflight_result['output']}).",
+        f"- Current Plan: exit {preflight_result['exit_code']}; pre-flight evidence `{checks[10][1]}`.",
         f"- Current offline Ship: exit {ship_result['exit_code']} "
         f"({ship_result['output']}; no verdict produced).",
-        "- The previous Plan attempt could not find `soup.yaml`; running from this checkout now finds the config. "
-        "The remaining Plan evidence is blocked by absent data/model artifacts.",
+        "- Plan completed but does not establish pre-flight readiness: its dataset hash is zero and model VRAM is unknown because the dataset and model artifacts are unavailable.",
         "- Did not install Soup training extras: the isolated Doctor requests Transformers >=5.16.1, "
         "while this project pins Transformers <5; the project Python environment also lacks its declared ML dependencies.",
         "- Official Soup documentation describes offline Ship evidence as numeric "

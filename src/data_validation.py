@@ -11,7 +11,9 @@ from src.common import REPORT_DIR, save_json
 def _clean_text(value: Any) -> str:
     if not isinstance(value, str):
         return ""
-    return re.sub(r"\s+", " ", value).strip()
+    value = value.replace("\r\n", "\n").replace("\r", "\n")
+    lines = [re.sub(r"[^\S\n]+", " ", line).strip() for line in value.split("\n")]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 
 
 def validate_records(rows: Iterable[dict[str, Any]]) -> tuple[list[dict[str, str]], dict[str, Any]]:

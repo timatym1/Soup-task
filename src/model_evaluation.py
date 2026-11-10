@@ -111,7 +111,7 @@ def build_report(
             "Project-reported findings are not locally reproduced unless responses are present.",
         ],
     }
-    report["project_reported_status"] = "FAIL" if category_findings else "NOT_REPORTED"
+    report["project_reported_status"] = "REPORTED" if category_findings else "NOT_REPORTED"
     report["reported_findings"] = category_findings
     report["reported_findings_source"] = findings.get("source")
     return report

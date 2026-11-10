@@ -168,7 +168,7 @@
     "Human review fields are deliberately left pending; no ratings are inferred.",
     "Project-reported findings are not locally reproduced unless responses are present."
   ],
-  "project_reported_status": "FAIL",
+  "project_reported_status": "REPORTED",
   "reported_findings": [
     "False-premise handling reportedly fails.",
     "Unknown personal facts reportedly trigger fabricated answers."

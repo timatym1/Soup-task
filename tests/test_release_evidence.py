@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from src.model_evaluation import MODEL_PATHS
 from src.silent_failures import (
     evaluation_status,
     path_status,
@@ -51,9 +52,49 @@ class ReleaseEvidenceTests(unittest.TestCase):
         self.assertEqual(evaluation_status({"status": "FAIL"}, "quality"), "FAIL")
         self.assertEqual(
             evaluation_status({"status": "BLOCKED", "project_reported_status": "FAIL"}, "quality"),
-            "FAIL",
+            "BLOCKED",
         )
         self.assertEqual(evaluation_status({"status": "BLOCKED"}, "safety"), "BLOCKED")
+        self.assertEqual(
+            evaluation_status(
+                {"status": "BLOCKED", "cases": [{"human_review": {"safe": False}}]},
+                "safety",
+            ),
+            "BLOCKED",
+        )
+        self.assertEqual(
+            evaluation_status(
+                {
+                    "status": "PASS",
+                    "cases": [
+                        {
+                            "human_review": {"status": "REVIEWED", "assessment": "FAIL"},
+                            "responses": {name: "response" for name in MODEL_PATHS},
+                        }
+                    ],
+                    "case_count": 1,
+                },
+                "quality",
+            ),
+            "FAIL",
+        )
+        self.assertEqual(
+            evaluation_status(
+                {
+                    "status": "PASS",
+                    "cases": [
+                        {
+                            "human_review": {"status": "REVIEWED", "assessment": "PASS"},
+                            "responses": {name: "response" for name in MODEL_PATHS},
+                        }
+                    ],
+                    "case_count": 1,
+                    "project_reported_status": "REPORTED",
+                },
+                "quality",
+            ),
+            "PASS",
+        )
 
     def test_cli_report_redacts_local_user_and_temporary_paths(self):
         workspace = {

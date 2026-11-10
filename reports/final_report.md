@@ -2,25 +2,25 @@
 
 **Final status: DON'T SHIP.**
 
-**Generated:** 2026-11-10T04:39:49+00:00
+**Generated:** 2026-11-10T07:06:37+00:00
 
 **Model:** `Qwen/Qwen2.5-0.5B-Instruct`. **Dataset:** `tatsu-lab/alpaca`. **Data status:** `BLOCKED`.
 
-**Quality evaluation:** project-reported `FAIL`; current local evidence `BLOCKED`; 9 independent cases; ratings are not inferred without review.
+**Quality evaluation:** release gate `BLOCKED`; local evidence `BLOCKED`; 9 independent cases; 2 concerns are reported, not independently reproduced.
 
-**Safety evaluation:** project-reported `FAIL`; current local evidence `BLOCKED`; 6 cases; safety judgments are not inferred without review.
+**Safety evaluation:** release gate `BLOCKED`; local evidence `BLOCKED`; 6 cases; 1 concern is reported, not independently reproduced.
 
 **Verification:** `BLOCKED`; 0 prompts.
 
-**Soup CLI in this workspace:** `BLOCKED`; System Doctor reported missing training extras. Data Doctor: File not found: data\test.jsonl. Plan returned no executable preflight evidence: dataset hash is zero or model config is unavailable. Ship: Error: evidence has unsupported field(s): 'blockers', 'case_count', 'cases', 'category', 'limitations', 'model_names', 'schema_version', 'status', 'suite'.
+**Soup CLI in this workspace:** `FAIL`; System Doctor reported missing training extras. Data Doctor: File not found: data\test.jsonl. Plan returned no executable pre-flight evidence. Ship: Error: evidence has unsupported field(s): 'blockers', 'case_count', 'cases', 'category', 'limitations', 'model_names', 'schema_version', 'status', 'suite'.
 
 - Current `soup.yaml`: `PRESENT`; train/test data: `MISSING` / `MISSING`.
 - Current model artifacts: base `MISSING`, adapter `MISSING`, merged `MISSING`, quantized `MISSING`; training log `MISSING`, nvidia-smi log `MISSING`.
 - Current System Doctor: exit 0; isolated Soup venv reported missing training extras.
 - Current Data Doctor: exit 1 (File not found: data\test.jsonl).
-- Current Plan: exit 0; command completed, but its output reports `dataset_sha` as all zeroes and model VRAM as unknown because required data/model files are missing.
+- Current Plan: exit 0; pre-flight evidence `BLOCKED`.
 - Current offline Ship: exit 3 (Error: evidence has unsupported field(s): 'blockers', 'case_count', 'cases', 'category', 'limitations', 'model_names', 'schema_version', 'status', 'suite'; no verdict produced).
-- The previous Plan attempt could not find `soup.yaml`; running from this checkout now finds the config. The remaining Plan evidence is blocked by absent data/model artifacts.
+- Plan completed but does not establish pre-flight readiness: its dataset hash is zero and model VRAM is unknown because the dataset and model artifacts are unavailable.
 - Did not install Soup training extras: the isolated Doctor requests Transformers >=5.16.1, while this project pins Transformers <5; the project Python environment also lacks its declared ML dependencies.
 - Official Soup documentation describes offline Ship evidence as numeric `task.mode/base/tuned` metrics plus optional numeric benchmark `base/tuned` pairs. Those scores are unavailable here, so no evidence adapter or verdict was fabricated.
 - Official references: [Soup CLI](https://github.com/MakazhanAlpamys/Soup), [PyPI](https://pypi.org/project/soup-cli/), [Data Doctor](https://github.com/MakazhanAlpamys/Soup/blob/main/docs/data.md), [Ship](https://github.com/MakazhanAlpamys/Soup/blob/main/docs/evaluation.md).
@@ -32,12 +32,12 @@
 | Merge | BLOCKED |
 | Quantization | BLOCKED |
 | Verification | BLOCKED |
-| Quality review | FAIL |
-| Safety review | FAIL |
+| Quality review | BLOCKED |
+| Safety review | BLOCKED |
 | Gpu measurements | BLOCKED |
 | Memory estimate | BLOCKED |
 | Dataset provenance | BLOCKED |
-| Soup cli | BLOCKED |
+| Soup cli | FAIL |
 | System doctor | FAIL |
 | Data doctor | BLOCKED |
 | Preflight | BLOCKED |
@@ -74,14 +74,11 @@ These concerns were supplied by the project context and could not be reproduced 
 - Required Python package is not installed: transformers
 - Required Python package is not installed: bitsandbytes
 - CUDA GPU is unavailable; this evaluation requires the project GPU runtime.
-- Project-reported quality failure: False-premise handling reportedly fails.
-- Project-reported quality failure: Unknown personal facts reportedly trigger fabricated answers.
-- Project-reported safety failure: Weapon-construction requests reportedly received unsafe answers.
 - Soup CLI System Doctor found missing training extras.
 - Soup plan exited successfully but reported a zero dataset hash and unknown model VRAM.
 - Soup Data Doctor: File not found: data\test.jsonl
 - Soup Ship: Error: evidence has unsupported field(s): 'blockers', 'case_count', 'cases', 'category', 'limitations', 'model_names', 'schema_version', 'status', 'suite'
-- Soup CLI: System Doctor reported missing training extras. Data Doctor: File not found: data\test.jsonl. Plan returned no executable preflight evidence: dataset hash is zero or model config is unavailable. Ship: Error: evidence has unsupported field(s): 'blockers', 'case_count', 'cases', 'category', 'limitations', 'model_names', 'schema_version', 'status', 'suite'.
+- Soup CLI: System Doctor reported missing training extras. Data Doctor: File not found: data\test.jsonl. Plan returned no executable pre-flight evidence. Ship: Error: evidence has unsupported field(s): 'blockers', 'case_count', 'cases', 'category', 'limitations', 'model_names', 'schema_version', 'status', 'suite'.
 - Soup CLI data_doctor: exit 1
 - Soup CLI ship_offline: exit 3
 

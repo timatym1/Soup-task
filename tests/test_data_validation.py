@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from src.data_validation import split_file_status, validate_existing_splits, validate_records
+from src.training_data import truncate_training_sequence
 
 
 class ValidateRecordsTests(unittest.TestCase):
@@ -42,6 +43,34 @@ class ValidateRecordsTests(unittest.TestCase):
         valid, _ = validate_records(rows)
 
         self.assertEqual(len(valid), 2)
+
+    def test_preserves_newlines_while_normalizing_horizontal_whitespace(self):
+        valid, _ = validate_records(
+            [{"instruction": "Line  one\n  Line   two", "output": "a\r\n\tb"}]
+        )
+
+        self.assertEqual(valid[0]["instruction"], "Line one\nLine two")
+        self.assertEqual(valid[0]["output"], "a\nb")
+
+    def test_truncation_preserves_assistant_eos_as_a_supervised_token(self):
+        input_ids, labels = truncate_training_sequence(
+            full_ids=[1, 2, 3, 4, 5, 99],
+            prompt_ids=[1, 2],
+            max_length=4,
+            eos_token_id=99,
+        )
+
+        self.assertEqual(input_ids, [1, 2, 3, 99])
+        self.assertEqual(labels, [-100, -100, 3, 99])
+
+    def test_truncation_rejects_examples_without_supervised_assistant_tokens(self):
+        with self.assertRaisesRegex(ValueError, "no supervised assistant tokens"):
+            truncate_training_sequence(
+                full_ids=[1, 2, 3, 99],
+                prompt_ids=[1, 2, 3, 4],
+                max_length=4,
+                eos_token_id=99,
+            )
 
     def test_existing_split_validation_is_read_only_and_detects_overlap(self):
         record = {"instruction": "say hello", "input": "", "output": "hello"}

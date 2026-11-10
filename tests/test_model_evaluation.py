@@ -38,7 +38,7 @@ class ModelEvaluationTests(unittest.TestCase):
         )
 
         self.assertEqual(report["status"], "BLOCKED")
-        self.assertEqual(report["project_reported_status"], "FAIL")
+        self.assertEqual(report["project_reported_status"], "REPORTED")
         self.assertEqual(report["reported_findings"], ["A known issue was reported."])
         self.assertEqual(report["cases"][0]["responses"]["base"], None)
         self.assertIsNone(report["cases"][0]["human_review"]["assessment"])
@@ -71,7 +71,7 @@ class ModelEvaluationTests(unittest.TestCase):
             "cases": [
                 {
                     "responses": {name: "response" for name in MODEL_PATHS},
-                    "human_review": {"status": "REVIEWED", "assessment": "correct"},
+                    "human_review": {"status": "REVIEWED", "assessment": "PASS"},
                 }
             ],
         }
@@ -90,6 +90,21 @@ class ModelEvaluationTests(unittest.TestCase):
         self.assertEqual(report["prompt_count"], 0)
         self.assertEqual(report["blockers"], ["model artifacts are missing"])
         self.assertEqual(report["models"], {})
+
+    def test_completed_generation_review_is_not_mislabeled_as_quality_pass(self):
+        case = {"id": "sample", "prompt": "Question", "criteria": "Check the answer."}
+        responses = {name: {"sample": "answer"} for name in MODEL_PATHS}
+        report = build_report(
+            "fixture-suite",
+            "quality",
+            [case],
+            responses,
+            [],
+            {"quality": ["A concern was reported, not reproduced."]},
+        )
+
+        self.assertEqual(report["status"], "NEEDS_HUMAN_REVIEW")
+        self.assertEqual(report["project_reported_status"], "REPORTED")
 
 
 if __name__ == "__main__":

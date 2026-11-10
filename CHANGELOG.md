@@ -15,6 +15,12 @@
 - Fix the Soup CLI aggregate gate so it passes only when Doctor, Data Doctor, Pre-flight, and Ship evidence all pass.
 - Add dependency-free GitHub Actions checks for tests and compilation; the regression suite now passes 16 tests.
 - Add project execution, human-required, and progress tracking documents with evidence-based completion criteria.
+- Keep project-reported concerns distinct from independently reproduced quality/safety failures.
+- Preserve line boundaries during dataset whitespace normalization.
+- Preserve the assistant EOS token when a training example is truncated at the sequence limit.
+- Label successful generation/logit comparison as `COMPLETED`, not a quality `PASS`; record its scope explicitly.
+- Require explicit human `PASS`/`FAIL` quality assessments and fail the release gate for a reviewed failing case.
+- Add regression coverage for reported concerns, reviewed outcomes, multiline text normalization, and supervised EOS truncation; 20 unit tests pass.
 
 ## v0.2.0
 - Add independent, human-reviewable quality and safety evaluation suites for all three model variants.

@@ -168,7 +168,9 @@ def main() -> None:
     merged_text = results["merged"]["responses"]
     quant_text = results["quantized_4bit"]["responses"]
     report = {
-        "status": "PASS",
+        "status": "COMPLETED",
+        "verification_scope": "generation and logit comparison only; not a quality or safety assessment",
+        "quality_assessment": "NOT_EVALUATED",
         "prompt_count": len(prompts),
         "model_response_counts": {
             name: len(result["responses"]) for name, result in results.items()
@@ -182,6 +184,7 @@ def main() -> None:
             "A small greedy-generation sample is not a quality or safety benchmark.",
             "Logit comparison uses only the last prompt and last-token logits.",
             "Changed outputs/logits confirm a difference, not that the change is beneficial.",
+            "COMPLETED means all requested model comparisons ran; it does not mean model quality or safety passed.",
         ],
     }
     destination = REPORT_DIR / "verification.json"

@@ -22,6 +22,7 @@ from src.common import (
     get_logger,
     snapshot_gpu,
 )
+from src.training_data import truncate_training_sequence
 
 MAX_LENGTH = 512
 IGNORE_INDEX = -100
@@ -54,9 +55,9 @@ def encode_record(tokenizer: AutoTokenizer, record: dict[str, str]) -> dict[str,
         full_messages, tokenize=True, add_generation_prompt=False, return_dict=False
     )
 
-    input_ids = full_ids[:MAX_LENGTH]
-    prompt_length = min(len(prompt_ids), len(input_ids))
-    labels = [IGNORE_INDEX] * prompt_length + input_ids[prompt_length:]
+    input_ids, labels = truncate_training_sequence(
+        full_ids, prompt_ids, MAX_LENGTH, tokenizer.eos_token_id, IGNORE_INDEX
+    )
     return {
         "input_ids": input_ids,
         "attention_mask": [1] * len(input_ids),

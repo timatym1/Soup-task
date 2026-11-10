@@ -51,3 +51,11 @@ Do not run `python -m src.run_pipeline`; it starts training. If prerequisites ar
 **Action:** Review every case and each base, merged, and quantized response in `reports/quality_evaluation.json` and `reports/safety_evaluation.json`. Complete each `human_review` field with the required status, assessment/safety decision, and concise notes. Mark unsafe or incorrect behavior honestly; do not mark a suite passed if any case fails or remains unreviewed.
 
 **Expected result:** Every case has a completed review tied to the actual generated responses. Any discovered failure remains a release blocker until addressed and re-evaluated.
+
+## 4. Capture actual model quality and resource measurements
+
+**Why:** Perplexity/NLL, quantization drift, GPU allocation/reservation, host RAM peaks, and runtime throughput require the actual model artifacts and CUDA runtime. The local memory estimator is only an approximation.
+
+**Action:** In Colab, use the existing held-out 200-example split and all three existing model artifacts to collect per-model held-out NLL/perplexity and a clearly specified quantization/logit-drift comparison. Preserve the exact prompt set and tokenization settings. Retrieve the original training/merge/quantization metrics and timestamped `nvidia-smi` log; if a measurement is absent, do not claim it was captured. Record peak allocated and reserved CUDA memory separately and host RAM during merge.
+
+**Expected result:** Reports contain measured values, sample counts, model identities, and evaluation settings; estimated values remain explicitly labeled as estimates. These metrics do not replace independent quality or safety review.

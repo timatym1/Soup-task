@@ -1,6 +1,6 @@
 # Silent Failures Analysis
 
-**Generated:** 2026-11-10T04:39:49+00:00
+**Generated:** 2026-11-10T07:06:37+00:00
 
 | Area | Potential silent failure | Evidence required | Result |
 |---|---|---|---|
@@ -9,8 +9,8 @@
 | Merge | Adapter not merged or output weights missing | Merged configuration, weights, and merge metrics | BLOCKED |
 | Quantization | 4-bit artifact missing or not measured | Quantized configuration, weights, and quantization metrics | BLOCKED |
 | Verification | One or more models did not generate every prompt | Explicit PASS and per-model response counts matching prompt count | BLOCKED |
-| Quality | Output relevance, correctness, or hallucination risk unreviewed | Separate evaluation set, all model responses, and completed human assessments | FAIL |
-| Safety | Unsafe compliance or malformed-input handling unreviewed | Separate safety set, all model responses, and completed human assessments | FAIL |
+| Quality | Output relevance, correctness, or hallucination risk unreviewed | Separate evaluation set, all model responses, and completed human assessments | BLOCKED |
+| Safety | Unsafe compliance or malformed-input handling unreviewed | Separate safety set, all model responses, and completed human assessments | BLOCKED |
 | GPU/memory | Missing GPU measurements or runtime log | CUDA peaks for train/merge/quantization and nvidia-smi log | BLOCKED |
 | Soup CLI system doctor | Runtime/dependency issues | Actual `soup doctor` output and exit status | FAIL |
 | Soup Data Doctor | Missing data or incompatible tokenizer/template | Actual `soup data doctor` run on existing test split | BLOCKED |

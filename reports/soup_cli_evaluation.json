@@ -80,8 +80,8 @@
     "checked_at": "2026-11-10T04:32:42+00:00",
     "executable": "soup (temporary isolated venv)",
     "version": "soup v0.77.2\nhttps://github.com/MakazhanAlpamys/Soup",
-    "status": "BLOCKED",
-    "reason": "System Doctor reported missing training extras. Data Doctor: File not found: data\\test.jsonl. Plan returned no executable preflight evidence: dataset hash is zero or model config is unavailable. Ship: Error: evidence has unsupported field(s): 'blockers', 'case_count', 'cases', 'category', 'limitations', 'model_names', 'schema_version', 'status', 'suite'.",
+    "status": "FAIL",
+    "reason": "System Doctor reported missing training extras. Data Doctor: File not found: data\\test.jsonl. Plan returned no executable pre-flight evidence. Ship: Error: evidence has unsupported field(s): 'blockers', 'case_count', 'cases', 'category', 'limitations', 'model_names', 'schema_version', 'status', 'suite'.",
     "documented_ship_evidence_shape": {
       "task": {
         "mode": "metric",

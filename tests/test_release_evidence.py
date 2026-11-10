@@ -7,6 +7,7 @@ from src.silent_failures import (
     evaluation_status,
     path_status,
     sanitize_cli_evidence,
+    soup_cli_status,
     verify_provenance,
 )
 
@@ -69,6 +70,22 @@ class ReleaseEvidenceTests(unittest.TestCase):
         self.assertNotIn(r"C:\Users\alice", workspace["commands"][0]["output"])
         self.assertIn("<temporary-state>", workspace["commands"][0]["output"])
         self.assertEqual(workspace["commands"][0]["arguments"][1], "<temporary-state>")
+
+    def test_soup_cli_gate_passes_only_when_all_release_commands_pass(self):
+        results = {
+            name: {"exit_code": 0}
+            for name in ("system_doctor", "data_doctor", "preflight_plan", "ship_offline")
+        }
+
+        self.assertEqual(soup_cli_status(results, False, False), "PASS")
+        self.assertEqual(soup_cli_status(results, False, True), "BLOCKED")
+        self.assertEqual(soup_cli_status(results, True, False), "FAIL")
+
+        del results["ship_offline"]
+        self.assertEqual(soup_cli_status(results, False, False), "BLOCKED")
+
+        results["ship_offline"] = {"exit_code": 3}
+        self.assertEqual(soup_cli_status(results, False, False), "BLOCKED")
 
 
 if __name__ == "__main__":

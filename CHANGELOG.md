@@ -12,6 +12,9 @@
 - Generate a machine-readable release decision and retain project-reported model risks without presenting them as locally reproduced results.
 - Add unit coverage for release statuses, blocked verification, and SHA-256 provenance checks.
 - Extend the unit suite to 15 passing tests.
+- Fix the Soup CLI aggregate gate so it passes only when Doctor, Data Doctor, Pre-flight, and Ship evidence all pass.
+- Add dependency-free GitHub Actions checks for tests and compilation; the regression suite now passes 16 tests.
+- Add project execution, human-required, and progress tracking documents with evidence-based completion criteria.
 
 ## v0.2.0
 - Add independent, human-reviewable quality and safety evaluation suites for all three model variants.

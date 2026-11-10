@@ -120,6 +120,19 @@ def cli_result(results: dict[str, Any], name: str) -> dict[str, Any]:
     }
 
 
+def soup_cli_status(
+    results: dict[str, Any], doctor_has_issues: bool, plan_blocked: bool
+) -> str:
+    required = ("system_doctor", "data_doctor", "preflight_plan", "ship_offline")
+    if any(name not in results for name in required):
+        return "BLOCKED"
+    if doctor_has_issues or results["system_doctor"].get("exit_code") != 0:
+        return "FAIL"
+    if plan_blocked or any(results[name].get("exit_code") != 0 for name in required[1:]):
+        return "BLOCKED"
+    return "PASS"
+
+
 def sanitize_cli_evidence(workspace: dict[str, Any]) -> None:
     for command in workspace.get("commands", []):
         output = command.get("output")
@@ -291,9 +304,6 @@ def main() -> None:
     safety_status = evaluation_status(safety, "safety")
     quality_pass = quality_status == "PASS"
     safety_pass = safety_status == "PASS"
-    cli_results = {
-        item.get("name"): item for item in soup_cli_report.get("commands", [])
-    }
     verification_status = (
         "FAIL"
         if verification.get("status") == "FAIL"
@@ -320,11 +330,10 @@ def main() -> None:
     current_cli_results = {
         item.get("name"): item for item in current_workspace.get("commands", [])
     }
-    cli_results.update(current_cli_results)
-    data_doctor_result = cli_result(cli_results, "data_doctor")
-    preflight_result = cli_result(cli_results, "preflight_plan")
-    ship_result = cli_result(cli_results, "ship_offline")
-    system_doctor = cli_results.get("system_doctor", {})
+    data_doctor_result = cli_result(current_cli_results, "data_doctor")
+    preflight_result = cli_result(current_cli_results, "preflight_plan")
+    ship_result = cli_result(current_cli_results, "ship_offline")
+    system_doctor = current_cli_results.get("system_doctor", {})
     doctor_output = system_doctor.get("output", "").lower()
     doctor_has_issues = "issue" in doctor_output and "0 issue" not in doctor_output
     doctor_status = (
@@ -341,18 +350,31 @@ def main() -> None:
         or "preflight_plan" not in current_cli_results
         or current_cli_results["preflight_plan"].get("exit_code") != 0
     )
-    if current_cli_results:
-        cli_blockers = []
-        if doctor_has_issues:
-            cli_blockers.append("System Doctor reported missing training extras.")
-        if data_doctor_result["exit_code"] != 0:
-            cli_blockers.append(f"Data Doctor: {data_doctor_result['output']}.")
-        if plan_blocked:
-            cli_blockers.append("Plan returned no executable preflight evidence: dataset hash is zero or model config is unavailable.")
-        if ship_result["exit_code"] != 0:
-            cli_blockers.append(f"Ship: {ship_result['output']}.")
-        if cli_blockers:
-            current_workspace["reason"] = " ".join(cli_blockers)
+    current_cli_status = soup_cli_status(
+        current_cli_results, doctor_has_issues, plan_blocked
+    )
+    current_workspace["status"] = current_cli_status
+    cli_blockers = []
+    if not current_cli_results:
+        cli_blockers.append("Required Soup CLI checks have not been run in this workspace.")
+    if doctor_has_issues:
+        cli_blockers.append("System Doctor reported missing training extras.")
+    if system_doctor.get("exit_code", "not run") not in (0, "not run"):
+        cli_blockers.append(f"System Doctor: {cli_result(current_cli_results, 'system_doctor')['output']}.")
+    if "data_doctor" not in current_cli_results:
+        cli_blockers.append("Data Doctor was not run.")
+    elif data_doctor_result["exit_code"] != 0:
+        cli_blockers.append(f"Data Doctor: {data_doctor_result['output']}.")
+    if plan_blocked:
+        cli_blockers.append("Plan returned no executable pre-flight evidence.")
+    if "ship_offline" not in current_cli_results:
+        cli_blockers.append("Ship was not run.")
+    elif ship_result["exit_code"] != 0:
+        cli_blockers.append(f"Ship: {ship_result['output']}.")
+    if cli_blockers:
+        current_workspace["reason"] = " ".join(cli_blockers)
+    else:
+        current_workspace.pop("reason", None)
     soup_cli_report["current_workspace"] = current_workspace
     save_json(REPORT_DIR / "soup_cli_evaluation.json", soup_cli_report)
     checks = [
@@ -465,7 +487,7 @@ def main() -> None:
         "gpu_measurements": checks[7][1],
         "memory_estimate": checks[12][1],
         "dataset_provenance": provenance_status,
-        "soup_cli": "BLOCKED",
+        "soup_cli": current_cli_status,
         "system_doctor": doctor_status,
         "data_doctor": checks[9][1],
         "preflight": checks[10][1],
@@ -566,8 +588,7 @@ def main() -> None:
         f"- Current System Doctor: exit {system_doctor.get('exit_code', 'not run')}; "
         f"{'isolated Soup venv reported missing training extras' if doctor_has_issues else 'no issue reported'}.",
         f"- Current Data Doctor: exit {data_doctor_result['exit_code']} ({data_doctor_result['output']}).",
-        f"- Current Plan: exit {preflight_result['exit_code']}; command completed, but its output reports "
-        "`dataset_sha` as all zeroes and model VRAM as unknown because required data/model files are missing.",
+        f"- Current Plan: exit {preflight_result['exit_code']} ({preflight_result['output']}).",
         f"- Current offline Ship: exit {ship_result['exit_code']} "
         f"({ship_result['output']}; no verdict produced).",
         "- The previous Plan attempt could not find `soup.yaml`; running from this checkout now finds the config. "

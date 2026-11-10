@@ -1,7 +1,5 @@
 import argparse
 
-from transformers import AutoConfig
-
 from src.common import BASE_DIR, MODEL_ID, REPORT_DIR, ensure_directories, get_logger, save_json
 
 
@@ -25,15 +23,24 @@ def estimate_parameters(config: object) -> tuple[int, int]:
 
 
 def build_estimate(config: object, batch_size: int, sequence_length: int) -> dict[str, object]:
+    if batch_size < 1 or sequence_length < 1:
+        raise ValueError("batch_size and sequence_length must be greater than zero.")
     params, lora_params = estimate_parameters(config)
     bytes_per_weight = 2
     weight_bytes = params * bytes_per_weight
     activation_bytes = (
         config.num_hidden_layers * batch_size * sequence_length * config.hidden_size * 2 * 2
     )
-    logits_bytes = batch_size * sequence_length * config.vocab_size * 2
-    adapter_and_optimizer = lora_params * (4 + 2)
-    train_estimate = weight_bytes + activation_bytes + logits_bytes + adapter_and_optimizer
+    logits_bytes = batch_size * sequence_length * config.vocab_size * 4
+    loss_workspace_bytes = logits_bytes
+    adapter_and_optimizer = lora_params * (4 + 4 + 2)
+    train_estimate = (
+        weight_bytes
+        + activation_bytes
+        + logits_bytes
+        + loss_workspace_bytes
+        + adapter_and_optimizer
+    )
     return {
         "parameter_count_estimate": params,
         "lora_parameter_count_estimate": lora_params,
@@ -41,8 +48,16 @@ def build_estimate(config: object, batch_size: int, sequence_length: int) -> dic
             "base_weights": "FP16",
             "lora_rank": 8,
             "lora_targets": ["q_proj", "v_proj"],
-            "optimizer": "8-bit Adam; 4-byte adapter weights + 2-byte moments",
+            "optimizer": (
+                "FP32 adapter weights and gradients + two 8-bit Adam moments; "
+                "excludes blockwise scale overhead"
+            ),
             "activations": "rough checkpointed-layer-input estimate; excludes CUDA/workspace overhead",
+            "logits": "FP32 logits for causal-language-model loss",
+            "loss_workspace": (
+                "one additional FP32-sized allowance for loss/backward workspace; "
+                "kernel-dependent softmax allocation may differ"
+            ),
             "sequence_length": sequence_length,
             "micro_batch_size": batch_size,
         },
@@ -50,6 +65,7 @@ def build_estimate(config: object, batch_size: int, sequence_length: int) -> dic
             "weights": weight_bytes,
             "activations": activation_bytes,
             "logits": logits_bytes,
+            "loss_workspace": loss_workspace_bytes,
             "adapter_and_optimizer_states": adapter_and_optimizer,
             "total": train_estimate,
             "total_gib": round(train_estimate / (1024**3), 3),
@@ -66,6 +82,8 @@ def build_estimate(config: object, batch_size: int, sequence_length: int) -> dic
 
 
 def main() -> None:
+    from transformers import AutoConfig
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--sequence-length", type=int, default=512)

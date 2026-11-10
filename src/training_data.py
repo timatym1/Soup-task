@@ -12,6 +12,8 @@ def truncate_training_sequence(
 ) -> tuple[list[int], list[int]]:
     if max_length < 1:
         raise ValueError("max_length must be greater than zero.")
+    if len(full_ids) < len(prompt_ids) or list(full_ids[:len(prompt_ids)]) != list(prompt_ids):
+        raise ValueError("Prompt tokens are not a prefix of the full conversation.")
     if not full_ids:
         return [], []
 

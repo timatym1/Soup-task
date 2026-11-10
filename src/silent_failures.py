@@ -1,5 +1,6 @@
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -153,17 +154,110 @@ def has_model_weights(path: Path) -> bool:
     return any(path.glob("*.safetensors")) or any(path.glob("pytorch_model*.bin"))
 
 
+def verification_complete(report: dict[str, Any]) -> bool:
+    prompt_count = report.get("prompt_count")
+    models = report.get("models")
+    if (
+        report.get("status") not in ("PASS", "COMPLETED")
+        or not isinstance(prompt_count, int)
+        or isinstance(prompt_count, bool)
+        or prompt_count < 1
+        or report.get("model_response_counts")
+        != {name: prompt_count for name in ("base", "merged", "quantized_4bit")}
+        or not isinstance(models, dict)
+    ):
+        return False
+    token_counts = {}
+    for name in ("base", "merged", "quantized_4bit"):
+        model = models.get(name)
+        if not isinstance(model, dict) or not isinstance(model.get("responses"), list):
+            return False
+        if len(model["responses"]) != prompt_count or not all(
+            isinstance(response, str) for response in model["responses"]
+        ):
+            return False
+        nll = model.get("heldout_nll")
+        if not isinstance(nll, dict):
+            return False
+        token_count = nll.get("assistant_token_count")
+        total_nll = nll.get("total_nll")
+        mean_nll = nll.get("mean_nll")
+        perplexity = nll.get("perplexity")
+        if (
+            not isinstance(token_count, int)
+            or isinstance(token_count, bool)
+            or token_count < 1
+            or not isinstance(total_nll, (int, float))
+            or not math.isfinite(total_nll)
+            or total_nll < 0
+            or not isinstance(mean_nll, (int, float))
+            or not math.isfinite(mean_nll)
+            or mean_nll < 0
+            or not math.isclose(mean_nll, total_nll / token_count, rel_tol=1e-6)
+            or not isinstance(perplexity, (int, float))
+            or not math.isfinite(perplexity)
+            or perplexity < 1
+            or not math.isclose(perplexity, math.exp(mean_nll), rel_tol=1e-6)
+        ):
+            return False
+        token_counts[name] = token_count
+    if len(set(token_counts.values())) != 1:
+        return False
+    quantized_model = models.get("quantized_4bit", {})
+    quantization = (
+        quantized_model.get("quantization")
+        if isinstance(quantized_model, dict)
+        else None
+    )
+    if not isinstance(quantization, dict) or quantization.get("status") != "PASS":
+        return False
+    drift = report.get("merged_vs_quantized_full_answer_logit_drift")
+    if not isinstance(drift, dict):
+        return False
+    drift_token_count = drift.get("assistant_token_count")
+    match_count = drift.get("top1_match_count")
+    mean_kl = drift.get("mean_kl_reference_to_candidate")
+    agreement = drift.get("top1_agreement")
+    maximum_delta = drift.get("max_absolute_logit_delta")
+    if (
+        not isinstance(drift_token_count, int)
+        or isinstance(drift_token_count, bool)
+        or drift_token_count < 1
+        or drift_token_count != token_counts["merged"]
+        or drift_token_count != token_counts["quantized_4bit"]
+        or not isinstance(match_count, int)
+        or isinstance(match_count, bool)
+        or not 0 <= match_count <= drift_token_count
+        or not isinstance(mean_kl, (int, float))
+        or not math.isfinite(mean_kl)
+        or mean_kl < 0
+        or not isinstance(agreement, (int, float))
+        or not math.isfinite(agreement)
+        or not math.isclose(agreement, match_count / drift_token_count, rel_tol=1e-6)
+        or not isinstance(maximum_delta, (int, float))
+        or not math.isfinite(maximum_delta)
+        or maximum_delta < 0
+    ):
+        return False
+    return True
+
+
 def review_complete(report: dict[str, Any], category: str) -> bool:
     cases = report.get("cases")
     if (
-        report.get("status") != "PASS"
+        category not in ("quality", "safety")
+        or report.get("status") not in ("NEEDS_HUMAN_REVIEW", "PASS")
         or not isinstance(cases, list)
         or not cases
         or report.get("case_count") != len(cases)
     ):
         return False
     for case in cases:
+        if not isinstance(case, dict):
+            return False
         review = case.get("human_review", {})
+        if not isinstance(review, dict):
+            return False
         if review.get("status") != "REVIEWED":
             return False
         if category == "quality" and review.get("assessment") not in ("PASS", "FAIL"):
@@ -171,6 +265,8 @@ def review_complete(report: dict[str, Any], category: str) -> bool:
         if category == "safety" and type(review.get("safe")) is not bool:
             return False
         responses = case.get("responses", {})
+        if not isinstance(responses, dict):
+            return False
         if any(not isinstance(responses.get(model), str) for model in ("base", "merged", "quantized_4bit")):
             return False
     return True
@@ -178,21 +274,24 @@ def review_complete(report: dict[str, Any], category: str) -> bool:
 
 def evaluation_status(report: dict[str, Any], category: str) -> str:
     cases = report.get("cases", [])
+    if not isinstance(cases, list):
+        return "BLOCKED"
     reviewed_failure = any(
         (
             category == "quality"
-            and case.get("human_review", {}).get("status") == "REVIEWED"
-            and case.get("human_review", {}).get("assessment") == "FAIL"
+            and review.get("status") == "REVIEWED"
+            and review.get("assessment") == "FAIL"
         )
         or (
             category == "safety"
-            and case.get("human_review", {}).get("status") == "REVIEWED"
-            and case.get("human_review", {}).get("safe") is False
+            and review.get("status") == "REVIEWED"
+            and review.get("safe") is False
         )
         for case in cases
         if isinstance(case, dict)
+        and isinstance((review := case.get("human_review")), dict)
     )
-    if report.get("status") == "FAIL" or reviewed_failure:
+    if reviewed_failure:
         return "FAIL"
     return "PASS" if review_complete(report, category) else "BLOCKED"
 
@@ -240,6 +339,7 @@ def main() -> None:
     soup_cli_report = read_json(REPORT_DIR / "soup_cli_evaluation.json")
     quality = read_json(REPORT_DIR / "quality_evaluation.json")
     safety = read_json(REPORT_DIR / "safety_evaluation.json")
+    historical_run = read_json(ROOT / "reports" / "historical_run_evidence.json")
     training = read_json(ADAPTER_DIR / "training_metrics.json")
     merge = read_json(MERGED_DIR / "merge_metrics.json")
     quantization = read_json(QUANTIZED_DIR / "quantization_metrics.json")
@@ -265,21 +365,7 @@ def main() -> None:
         and (ROOT / "data" / "train.jsonl").is_file()
         and (ROOT / "data" / "test.jsonl").is_file()
     )
-    verification_pass = (
-        verification.get("status") in ("PASS", "COMPLETED")
-        and verification.get("prompt_count", 0) > 0
-        and verification.get("model_response_counts")
-        == {
-            "base": verification.get("prompt_count"),
-            "merged": verification.get("prompt_count"),
-            "quantized_4bit": verification.get("prompt_count"),
-        }
-        and all(
-            len(verification.get("models", {}).get(model, {}).get("responses", []))
-            == verification.get("prompt_count")
-            for model in ("base", "merged", "quantized_4bit")
-        )
-    )
+    verification_pass = verification_complete(verification)
     model_checks = {
         "base": path_status(BASE_DIR / "config.json") == "PRESENT" and has_model_weights(BASE_DIR),
         "adapter": path_status(ADAPTER_DIR / "adapter_config.json") == "PRESENT" and has_model_weights(ADAPTER_DIR),
@@ -397,7 +483,7 @@ def main() -> None:
         ("Soup CLI system doctor", doctor_status),
         (
             "Soup Data Doctor",
-            "PASS"
+            "ESTIMATE_ONLY"
             if "data_doctor" in current_cli_results and current_cli_results["data_doctor"].get("exit_code") == 0
             else "BLOCKED",
         ),
@@ -410,7 +496,7 @@ def main() -> None:
         ),
         (
             "Memory estimate",
-            "PASS"
+            "ESTIMATE_ONLY"
             if memory.get("status") == "ESTIMATE_ONLY"
             and memory.get("training_estimate_bytes", {}).get("total")
             else "BLOCKED",
@@ -502,23 +588,6 @@ def main() -> None:
         "ship": checks[11][1],
     }
     verdict = "SHIP" if all(status == "PASS" for status in check_status.values()) else "DON'T SHIP"
-    reported_model_concerns = [
-        f"{category.capitalize()}: {finding}"
-        for category, report in (("quality", quality), ("safety", safety))
-        for finding in report.get("reported_findings", [])
-    ]
-    quality_concern_count = len(quality.get("reported_findings", []))
-    safety_concern_count = len(safety.get("reported_findings", []))
-    quality_concern_summary = (
-        f"{quality_concern_count} concerns are reported, not independently reproduced"
-        if quality_concern_count != 1
-        else "1 concern is reported, not independently reproduced"
-    )
-    safety_concern_summary = (
-        f"{safety_concern_count} concerns are reported, not independently reproduced"
-        if safety_concern_count != 1
-        else "1 concern is reported, not independently reproduced"
-    )
     blockers = [
         f"{name}: {status.lower()} under the current repository root"
         for name, status in workspace_files.items()
@@ -536,12 +605,6 @@ def main() -> None:
     )
     blockers.extend(quality.get("blockers", []))
     blockers.extend(safety.get("blockers", []))
-    blockers.extend(
-        f"Project-reported {category} failure: {finding}"
-        for category, report in (("quality", quality), ("safety", safety))
-        if report.get("project_reported_status") == "FAIL"
-        for finding in report.get("reported_findings", [])
-    )
     if doctor_has_issues:
         blockers.append("Soup CLI System Doctor found missing training extras.")
     if plan_blocked:
@@ -565,13 +628,35 @@ def main() -> None:
         "verdict": verdict,
         "checks": check_status,
         "blockers": list(dict.fromkeys(blockers)),
-        "reported_model_concerns": reported_model_concerns,
-        "concern_source": quality.get("reported_findings_source")
-        or safety.get("reported_findings_source"),
         "workspace_files": workspace_files,
         "provenance": provenance_results,
+        "historical_run_evidence": historical_run,
     }
     save_json(REPORT_DIR / "release_decision.json", release_decision)
+    historical_training = historical_run.get("training", {})
+    historical_verification = historical_run.get("verification", {})
+    historical_memory = historical_run.get("memory", {})
+    training_peak = historical_memory.get("training_peak", {})
+    merge_peak = historical_memory.get("merge_peak", {})
+    quantization_peak = historical_memory.get("quantization_peak", {})
+    verified_models = verification.get("models", {})
+    heldout_summary = ", ".join(
+        f"{name}: NLL {metrics.get('mean_nll', 'n/a')}, "
+        f"PPL {metrics.get('perplexity', 'n/a')} "
+        f"({metrics.get('assistant_token_count', 0)} tokens)"
+        for name in ("base", "merged", "quantized_4bit")
+        if isinstance(
+            (metrics := verified_models.get(name, {}).get("heldout_nll")), dict
+        )
+    ) or "not run"
+    drift = verification.get("merged_vs_quantized_full_answer_logit_drift", {})
+    drift_summary = (
+        f"mean KL {drift['mean_kl_reference_to_candidate']}, "
+        f"top-1 agreement {drift['top1_agreement']} across "
+        f"{drift['assistant_token_count']} assistant tokens"
+        if isinstance(drift, dict) and drift.get("assistant_token_count", 0) > 0
+        else "not run"
+    )
     report_lines = [
         "# Final Technical Report",
         "",
@@ -579,48 +664,40 @@ def main() -> None:
         "",
         f"**Generated:** {timestamp()}",
         "",
-        f"**Model:** `{MODEL_ID}`. **Dataset:** `{data.get('dataset_id', provenance.get('dataset_id', 'tatsu-lab/alpaca'))}`. "
-        f"**Data status:** `{data.get('status', 'BLOCKED')}`.",
+        f"Current checkout: `{MODEL_ID}` on `{data.get('dataset_id', provenance.get('dataset_id', 'tatsu-lab/alpaca'))}`; "
+        f"data status `{data.get('status', 'BLOCKED')}`. Missing local artifacts do not invalidate historical results.",
         "",
-        "**Quality evaluation:** "
-        f"release gate `{quality_status}`; local evidence "
-        f"`{quality.get('status', 'BLOCKED')}`; {quality_cases} independent cases; "
-        f"{quality_concern_summary}.",
+        "## Historical run",
         "",
-        "**Safety evaluation:** "
-        f"release gate `{safety_status}`; local evidence "
-        f"`{safety.get('status', 'BLOCKED')}`; {safety_cases} cases; "
-        f"{safety_concern_summary}.",
+        f"Summary from [{historical_run.get('source_commit', 'unknown')}]: "
+        f"{historical_run.get('configuration', {}).get('train_examples', 'n/a')} train / "
+        f"{historical_run.get('configuration', {}).get('test_examples', 'n/a')} test examples; "
+        f"train loss {historical_training.get('train_loss', 'n/a')}, eval loss "
+        f"{historical_training.get('eval_loss', 'n/a')}.",
         "",
-        "**Verification:** "
-        f"`{verification.get('status', 'BLOCKED')}`; "
-        f"{verification.get('prompt_count', 'not run')} prompts.",
+        f"Verification changed {historical_verification.get('changed_base_to_merged_responses', 'n/a')}/"
+        f"{historical_verification.get('prompts', 'n/a')} base-to-merged and "
+        f"{historical_verification.get('changed_merged_to_4bit_responses', 'n/a')}/"
+        f"{historical_verification.get('prompts', 'n/a')} merged-to-4-bit responses; single-position "
+        f"max logit deltas {historical_verification.get('base_to_merged_last_token_max_abs_delta', 'n/a')} "
+        f"and {historical_verification.get('merged_to_4bit_last_token_max_abs_delta', 'n/a')}.",
         "",
-        f"**Soup CLI in this workspace:** `{current_workspace.get('status', 'BLOCKED')}`; "
-        + str(current_workspace.get("reason", "No current execution result recorded.")),
+        f"Current held-out verification: `{verification.get('status', 'BLOCKED')}`; "
+        f"{verification.get('prompt_count', 0)} records; {heldout_summary}.",
         "",
-        f"- Current `soup.yaml`: `{workspace_files['config']}`; train/test data: "
-        f"`{workspace_files['train_data']}` / `{workspace_files['test_data']}`.",
-        f"- Current model artifacts: base `{workspace_files['base_model']}`, adapter "
-        f"`{workspace_files['adapter']}`, merged `{workspace_files['merged_model']}`, "
-        f"quantized `{workspace_files['quantized_model']}`; training log "
-        f"`{workspace_files['training_log']}`, nvidia-smi log `{workspace_files['nvidia_smi_log']}`.",
-        f"- Current System Doctor: exit {system_doctor.get('exit_code', 'not run')}; "
-        f"{'isolated Soup venv reported missing training extras' if doctor_has_issues else 'no issue reported'}.",
-        f"- Current Data Doctor: exit {data_doctor_result['exit_code']} ({data_doctor_result['output']}).",
-        f"- Current Plan: exit {preflight_result['exit_code']}; pre-flight evidence `{checks[10][1]}`.",
-        f"- Current offline Ship: exit {ship_result['exit_code']} "
-        f"({ship_result['output']}; no verdict produced).",
-        "- Plan completed but does not establish pre-flight readiness: its dataset hash is zero and model VRAM is unknown because the dataset and model artifacts are unavailable.",
-        "- Did not install Soup training extras: the isolated Doctor requests Transformers >=5.16.1, "
-        "while this project pins Transformers <5; the project Python environment also lacks its declared ML dependencies.",
-        "- Official Soup documentation describes offline Ship evidence as numeric "
-        "`task.mode/base/tuned` metrics plus optional numeric benchmark `base/tuned` pairs. "
-        "Those scores are unavailable here, so no evidence adapter or verdict was fabricated.",
-        "- Official references: [Soup CLI](https://github.com/MakazhanAlpamys/Soup), "
-        "[PyPI](https://pypi.org/project/soup-cli/), "
-        "[Data Doctor](https://github.com/MakazhanAlpamys/Soup/blob/main/docs/data.md), "
-        "[Ship](https://github.com/MakazhanAlpamys/Soup/blob/main/docs/evaluation.md).",
+        f"Current merged-to-4-bit full-answer drift: {drift_summary}.",
+        "",
+        f"Memory: training estimate {historical_memory.get('estimated_training_gib', 'n/a')} GiB; "
+        f"measured allocated/reserved {round(training_peak.get('allocated_bytes', 0) / 1024**3, 3)}/"
+        f"{round(training_peak.get('reserved_bytes', 0) / 1024**3, 3)} GiB; merge allocated "
+        f"{round(merge_peak.get('allocated_bytes', 0) / 1024**3, 3)} GiB; 4-bit allocated "
+        f"{round(quantization_peak.get('allocated_bytes', 0) / 1024**3, 3)} GiB.",
+        "",
+        f"Evidence limit: these values are transcribed from the tracked summary in commit "
+        f"`{historical_run.get('source_commit', 'unknown')}`. That commit does not contain raw logs, "
+        "nvidia-smi output, model weights, or split files; this checkout cannot independently reproduce them.",
+        "",
+        "## Current release gates",
         "",
         "| Gate | Result |",
         "|---|---|",
@@ -628,58 +705,40 @@ def main() -> None:
     report_lines.extend(f"| {name.replace('_', ' ').capitalize()} | {status} |" for name, status in check_status.items())
     report_lines += [
         "",
-        "## Project-reported model concerns",
+        "## What surprised / what worries me",
         "",
-    ]
-    report_lines.extend(f"- {concern}" for concern in reported_model_concerns)
-    report_lines += [
+        "The historical training reserved-memory peak was about 8.8x the estimate, while the 4-bit "
+        "logit delta was the same order as the base-to-merged delta. The latter is a single position, "
+        "not a quality metric; neither it nor changed greedy responses proves improvement. Held-out "
+        "full-token drift, null-adapter/shuffled-label controls, raw GPU logs, "
+        "near-duplicate audit of the historical split, and human quality/safety reviews remain absent.",
         "",
-        "These concerns were supplied by the project context and could not be reproduced here because model artifacts are unavailable.",
+        "## AI use",
+        "",
+        "Copilot-assisted code was reviewed against the repository and regression tests. This change "
+        "removes unsupported report-driven verdicts, adds deterministic sampling, leakage and prompt-prefix "
+        "checks, and corrects memory-estimate assumptions; GPU-dependent claims were not re-run.",
         "",
         "## Current blockers",
         "",
     ]
-    report_lines.extend(f"- {blocker}" for blocker in release_decision["blockers"])
+    report_lines.extend(f"- {blocker}" for blocker in release_decision["blockers"][:8])
+    if len(release_decision["blockers"]) > 8:
+        report_lines.append(f"- {len(release_decision['blockers']) - 8} additional blockers are listed in `reports/release_decision.json`.")
     report_lines += [
         "",
-        "## Colab recheck commands",
-        "",
-        "Use a CUDA-enabled Colab runtime and restore the existing `models/`, `logs/`, and, if available, "
-        "`data/` outputs (including per-stage metrics). Missing evidence remains BLOCKED. "
-        "These commands do not train, merge, or quantize the model.",
+        "## Recheck",
         "",
         "```bash",
-        "python -m pip install -r requirements.txt",
-        "python -m pip install soup-cli",
         "python -m unittest discover -s tests -v",
         "python -m src.data_validation",
-        "python -m src.memory_analysis",
-        "soup --version",
-        "soup --help",
-        "soup doctor",
-        "soup data doctor --help",
-        "soup data doctor data/test.jsonl --model Qwen/Qwen2.5-0.5B-Instruct --max-length 512",
-        "python -c \"import subprocess,uuid; from pathlib import Path; p=Path('.soup-plan-'+uuid.uuid4().hex+'.tfstate'); r=subprocess.run(['soup','plan','--config','soup.yaml','--state',str(p)]); p.unlink(missing_ok=True); raise SystemExit(r.returncode)\"",
-        "soup ship --help",
-        "# Run only with restored model artifacts and real evaluation data.",
-        "soup ship --base models/base --adapter models/adapter --task-eval \"$EVAL_JSONL\"",
-        "python -m src.verification --samples 20",
+        "python -m src.verification --samples 200",
         "python -m src.model_evaluation",
         "python -m src.silent_failures",
         "```",
         "",
-        "Data Doctor, Plan, and Ship commands must be checked against the installed CLI's help. "
-        "Do not synthesize Ship metrics or treat command success as a quality/safety pass.",
-        "",
-        "Training and inference were not run in this workspace. Artifacts are marked missing only "
-        "relative to this repository root; this does not establish whether they exist in Google Drive. "
-        "Local dependencies: torch="
-        f"{find_spec('torch') is not None}, "
-        f"transformers={find_spec('transformers') is not None}, "
-        f"peft={find_spec('peft') is not None}, trl={find_spec('trl') is not None}, "
-        f"datasets={find_spec('datasets') is not None}, bitsandbytes={find_spec('bitsandbytes') is not None}, "
-        f"accelerate={find_spec('accelerate') is not None}.",
-        "",
+        "Do not train or claim release readiness until original artifacts are restored, GPU checks are "
+        "rerun, and every quality/safety case is reviewed.",
     ]
     (REPORT_DIR / "final_report.md").write_text("\n".join(report_lines), encoding="utf-8")
     logger.info("Wrote evidence-gated release and silent-failure reports")

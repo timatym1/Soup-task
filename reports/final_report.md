@@ -2,28 +2,25 @@
 
 **Final status: DON'T SHIP.**
 
-**Generated:** 2026-11-10T07:06:37+00:00
+**Generated:** 2026-11-10T15:08:00+00:00
 
-**Model:** `Qwen/Qwen2.5-0.5B-Instruct`. **Dataset:** `tatsu-lab/alpaca`. **Data status:** `BLOCKED`.
+Current checkout: `Qwen/Qwen2.5-0.5B-Instruct` on `tatsu-lab/alpaca`; data status `BLOCKED`. Missing local artifacts do not invalidate historical results.
 
-**Quality evaluation:** release gate `BLOCKED`; local evidence `BLOCKED`; 9 independent cases; 2 concerns are reported, not independently reproduced.
+## Historical run
 
-**Safety evaluation:** release gate `BLOCKED`; local evidence `BLOCKED`; 6 cases; 1 concern is reported, not independently reproduced.
+Summary from [66c591c4aed2485a41f038525915f88e572e6c94]: 1800 train / 200 test examples; train loss 1.4922131479313943, eval loss 1.474936842918396.
 
-**Verification:** `BLOCKED`; 0 prompts.
+Verification changed 17/20 base-to-merged and 16/20 merged-to-4-bit responses; single-position max logit deltas 8.1328125 and 4.1796875.
 
-**Soup CLI in this workspace:** `FAIL`; System Doctor reported missing training extras. Data Doctor: File not found: data\test.jsonl. Plan returned no executable pre-flight evidence. Ship: Error: evidence has unsupported field(s): 'blockers', 'case_count', 'cases', 'category', 'limitations', 'model_names', 'schema_version', 'status', 'suite'.
+Current held-out verification: `BLOCKED`; 0 records; not run.
 
-- Current `soup.yaml`: `PRESENT`; train/test data: `MISSING` / `MISSING`.
-- Current model artifacts: base `MISSING`, adapter `MISSING`, merged `MISSING`, quantized `MISSING`; training log `MISSING`, nvidia-smi log `MISSING`.
-- Current System Doctor: exit 0; isolated Soup venv reported missing training extras.
-- Current Data Doctor: exit 1 (File not found: data\test.jsonl).
-- Current Plan: exit 0; pre-flight evidence `BLOCKED`.
-- Current offline Ship: exit 3 (Error: evidence has unsupported field(s): 'blockers', 'case_count', 'cases', 'category', 'limitations', 'model_names', 'schema_version', 'status', 'suite'; no verdict produced).
-- Plan completed but does not establish pre-flight readiness: its dataset hash is zero and model VRAM is unknown because the dataset and model artifacts are unavailable.
-- Did not install Soup training extras: the isolated Doctor requests Transformers >=5.16.1, while this project pins Transformers <5; the project Python environment also lacks its declared ML dependencies.
-- Official Soup documentation describes offline Ship evidence as numeric `task.mode/base/tuned` metrics plus optional numeric benchmark `base/tuned` pairs. Those scores are unavailable here, so no evidence adapter or verdict was fabricated.
-- Official references: [Soup CLI](https://github.com/MakazhanAlpamys/Soup), [PyPI](https://pypi.org/project/soup-cli/), [Data Doctor](https://github.com/MakazhanAlpamys/Soup/blob/main/docs/data.md), [Ship](https://github.com/MakazhanAlpamys/Soup/blob/main/docs/evaluation.md).
+Current merged-to-4-bit full-answer drift: not run.
+
+Memory: training estimate 1.295 GiB; measured allocated/reserved 2.518/11.42 GiB; merge allocated 0.946 GiB; 4-bit allocated 0.459 GiB.
+
+Evidence limit: these values are transcribed from the tracked summary in commit `66c591c4aed2485a41f038525915f88e572e6c94`. That commit does not contain raw logs, nvidia-smi output, model weights, or split files; this checkout cannot independently reproduce them.
+
+## Current release gates
 
 | Gate | Result |
 |---|---|
@@ -43,13 +40,13 @@
 | Preflight | BLOCKED |
 | Ship | BLOCKED |
 
-## Project-reported model concerns
+## What surprised / what worries me
 
-- Quality: False-premise handling reportedly fails.
-- Quality: Unknown personal facts reportedly trigger fabricated answers.
-- Safety: Weapon-construction requests reportedly received unsafe answers.
+The historical training reserved-memory peak was about 8.8x the estimate, while the 4-bit logit delta was the same order as the base-to-merged delta. The latter is a single position, not a quality metric; neither it nor changed greedy responses proves improvement. Held-out full-token drift, null-adapter/shuffled-label controls, raw GPU logs, near-duplicate audit of the historical split, and human quality/safety reviews remain absent.
 
-These concerns were supplied by the project context and could not be reproduced here because model artifacts are unavailable.
+## AI use
+
+Copilot-assisted code was reviewed against the repository and regression tests. This change removes unsupported report-driven verdicts, adds deterministic sampling, leakage and prompt-prefix checks, and corrects memory-estimate assumptions; GPU-dependent claims were not re-run.
 
 ## Current blockers
 
@@ -61,51 +58,16 @@ These concerns were supplied by the project context and could not be reproduced 
 - quantized_model: missing under the current repository root
 - training_log: missing under the current repository root
 - nvidia_smi_log: missing under the current repository root
-- Required package is unavailable: transformers
-- Required package is unavailable: peft
-- Required package is unavailable: datasets
-- Required package is unavailable: bitsandbytes
-- Required package is unavailable: accelerate
-- Provenance train: File is missing.
-- Provenance test: File is missing.
-- base: missing models/base/config.json
-- merged: missing models/merged/config.json
-- quantized_4bit: missing models/quantized/config.json
-- Required Python package is not installed: transformers
-- Required Python package is not installed: bitsandbytes
-- CUDA GPU is unavailable; this evaluation requires the project GPU runtime.
-- Soup CLI System Doctor found missing training extras.
-- Soup plan exited successfully but reported a zero dataset hash and unknown model VRAM.
-- Soup Data Doctor: File not found: data\test.jsonl
-- Soup Ship: Error: evidence has unsupported field(s): 'blockers', 'case_count', 'cases', 'category', 'limitations', 'model_names', 'schema_version', 'status', 'suite'
-- Soup CLI: System Doctor reported missing training extras. Data Doctor: File not found: data\test.jsonl. Plan returned no executable pre-flight evidence. Ship: Error: evidence has unsupported field(s): 'blockers', 'case_count', 'cases', 'category', 'limitations', 'model_names', 'schema_version', 'status', 'suite'.
-- Soup CLI data_doctor: exit 1
-- Soup CLI ship_offline: exit 3
+- 20 additional blockers are listed in `reports/release_decision.json`.
 
-## Colab recheck commands
-
-Use a CUDA-enabled Colab runtime and restore the existing `models/`, `logs/`, and, if available, `data/` outputs (including per-stage metrics). Missing evidence remains BLOCKED. These commands do not train, merge, or quantize the model.
+## Recheck
 
 ```bash
-python -m pip install -r requirements.txt
-python -m pip install soup-cli
 python -m unittest discover -s tests -v
 python -m src.data_validation
-python -m src.memory_analysis
-soup --version
-soup --help
-soup doctor
-soup data doctor --help
-soup data doctor data/test.jsonl --model Qwen/Qwen2.5-0.5B-Instruct --max-length 512
-python -c "import subprocess,uuid; from pathlib import Path; p=Path('.soup-plan-'+uuid.uuid4().hex+'.tfstate'); r=subprocess.run(['soup','plan','--config','soup.yaml','--state',str(p)]); p.unlink(missing_ok=True); raise SystemExit(r.returncode)"
-soup ship --help
-# Run only with restored model artifacts and real evaluation data.
-soup ship --base models/base --adapter models/adapter --task-eval "$EVAL_JSONL"
-python -m src.verification --samples 20
+python -m src.verification --samples 200
 python -m src.model_evaluation
 python -m src.silent_failures
 ```
 
-Data Doctor, Plan, and Ship commands must be checked against the installed CLI's help. Do not synthesize Ship metrics or treat command success as a quality/safety pass.
-
-Training and inference were not run in this workspace. Artifacts are marked missing only relative to this repository root; this does not establish whether they exist in Google Drive. Local dependencies: torch=True, transformers=False, peft=False, trl=False, datasets=False, bitsandbytes=False, accelerate=False.
+Do not train or claim release readiness until original artifacts are restored, GPU checks are rerun, and every quality/safety case is reviewed.

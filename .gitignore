@@ -16,6 +16,7 @@ reports/*
 !reports/quality_evaluation.json
 !reports/safety_evaluation.json
 !reports/soup_cli_evaluation.json
+!reports/release_decision.json
 
 # Local Colab / Google Drive artifacts
 /data

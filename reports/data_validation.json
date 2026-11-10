@@ -1,4 +1,18 @@
 {
   "status": "BLOCKED",
-  "reason": "No data validation evidence exists. Run src.data_preparation."
+  "validation_scope": "existing train/test JSONL splits; source dataset not re-read",
+  "splits": {
+    "train": {
+      "path": "data/train.jsonl",
+      "status": "MISSING"
+    },
+    "test": {
+      "path": "data/test.jsonl",
+      "status": "MISSING"
+    }
+  },
+  "blockers": [
+    "data/train.jsonl is missing under the repository root.",
+    "data/test.jsonl is missing under the repository root."
+  ]
 }

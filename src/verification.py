@@ -1,10 +1,10 @@
+from __future__ import annotations
+
 import argparse
+from importlib.util import find_spec
 import json
 import logging
 from pathlib import Path
-
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.common import (
     BASE_DIR,
@@ -16,6 +16,17 @@ from src.common import (
     get_logger,
     save_json,
 )
+from src.model_evaluation import MODEL_PATHS, REQUIRED_PACKAGES, model_artifact_errors
+
+
+def build_blocked_report(blockers: list[str]) -> dict[str, object]:
+    return {
+        "status": "BLOCKED",
+        "prompt_count": 0,
+        "blockers": blockers,
+        "model_response_counts": {},
+        "models": {},
+    }
 
 
 def load_prompts(path: Path, limit: int) -> list[str]:
@@ -35,6 +46,9 @@ def load_prompts(path: Path, limit: int) -> list[str]:
 
 
 def run_model(model_path: Path, prompts: list[str]) -> tuple[list[str], torch.Tensor, dict[str, int] | None]:
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
     tokenizer = AutoTokenizer.from_pretrained(model_path)
@@ -86,10 +100,14 @@ def run_model(model_path: Path, prompts: list[str]) -> tuple[list[str], torch.Te
     del model
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+    if last_logits is None:
+        raise RuntimeError(f"No prompts were evaluated for {model_path}.")
     return outputs, last_logits, memory
 
 
 def compare_logits(reference: torch.Tensor, candidate: torch.Tensor) -> dict[str, float | bool]:
+    import torch
+
     reference = reference.float()
     candidate = candidate.float()
     delta = candidate - reference
@@ -110,7 +128,31 @@ def main() -> None:
     args = parser.parse_args()
     logger = get_logger("verification", "verification.log")
     ensure_directories()
-    prompts = load_prompts(Path(__file__).resolve().parents[1] / "data" / "test.jsonl", args.samples)
+    if args.samples < 1:
+        parser.error("--samples must be greater than zero.")
+
+    data_path = Path(__file__).resolve().parents[1] / "data" / "test.jsonl"
+    blockers = model_artifact_errors(MODEL_PATHS)
+    if not data_path.is_file():
+        blockers.append("Test data is missing: data/test.jsonl")
+    blockers.extend(
+        f"Required Python package is not installed: {package}"
+        for package in REQUIRED_PACKAGES
+        if find_spec(package) is None
+    )
+    if find_spec("torch") is not None:
+        import torch
+
+        if not torch.cuda.is_available():
+            blockers.append("CUDA GPU is unavailable; verification requires the project GPU runtime.")
+    if blockers:
+        report = build_blocked_report(blockers)
+        destination = REPORT_DIR / "verification.json"
+        save_json(destination, report)
+        logger.info("Verification blocked; report saved to %s", destination)
+        return
+
+    prompts = load_prompts(data_path, args.samples)
     model_specs = [("base", BASE_DIR), ("merged", MERGED_DIR), ("quantized_4bit", QUANTIZED_DIR)]
     results = {}
     logits_by_model = {}

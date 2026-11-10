@@ -7,6 +7,11 @@
 - Fix tensor handling, generation decoding offsets, and recovery from training interruptions.
 - Verify dataset validation, completed training, merge, NF4 quantization, model verification, and 9/9 unit tests.
 - Record known issues: quality and safety evaluations FAIL; Soup CLI integration is BLOCKED; release decision is DON'T SHIP.
+- Expand evaluation cases for multi-step reasoning, hallucination resistance, instruction following, privacy, and harmful assistance.
+- Make verification write explicit BLOCKED evidence when prerequisites are missing; report current artifact availability and recomputed provenance hashes.
+- Generate a machine-readable release decision and retain project-reported model risks without presenting them as locally reproduced results.
+- Add unit coverage for release statuses, blocked verification, and SHA-256 provenance checks.
+- Extend the unit suite to 15 passing tests.
 
 ## v0.2.0
 - Add independent, human-reviewable quality and safety evaluation suites for all three model variants.

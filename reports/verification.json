@@ -1,4 +1,15 @@
 {
   "status": "BLOCKED",
-  "reason": "Three-model verification has not produced a report."
+  "prompt_count": 0,
+  "blockers": [
+    "base: missing models/base/config.json",
+    "merged: missing models/merged/config.json",
+    "quantized_4bit: missing models/quantized/config.json",
+    "Test data is missing: data/test.jsonl",
+    "Required Python package is not installed: transformers",
+    "Required Python package is not installed: bitsandbytes",
+    "CUDA GPU is unavailable; verification requires the project GPU runtime."
+  ],
+  "model_response_counts": {},
+  "models": {}
 }

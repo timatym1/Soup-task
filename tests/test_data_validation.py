@@ -3,10 +3,18 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.data_validation import validate_existing_splits, validate_records
+from src.data_validation import split_file_status, validate_existing_splits, validate_records
 
 
 class ValidateRecordsTests(unittest.TestCase):
+    def test_split_file_status_distinguishes_missing_from_present(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "train.jsonl"
+
+            self.assertEqual(split_file_status(path), "MISSING")
+            path.write_text("", encoding="utf-8")
+            self.assertEqual(split_file_status(path), "PRESENT")
+
     def test_removes_empty_and_normalized_duplicate_records(self):
         rows = [
             {"instruction": "  Say   hello ", "input": "", "output": "Hi"},

@@ -40,18 +40,29 @@ def load_cases(path: Path = CASE_PATH) -> dict[str, Any]:
         for row in rows:
             if not isinstance(row.get("prompt"), str) or not row.get("criteria"):
                 raise ValueError(f"Case {row['id']} needs a string prompt and review criteria.")
+    reported = cases.get("reported_findings", {})
+    if not isinstance(reported, dict) or any(
+        not isinstance(reported.get(category), list)
+        or any(not isinstance(item, str) or not item for item in reported[category])
+        for category in ("quality", "safety")
+    ):
+        raise ValueError("Evaluation suite needs quality and safety reported_findings lists.")
     return cases
 
 
 def model_artifact_errors(model_paths: dict[str, Path]) -> list[str]:
     errors = []
     for name, path in model_paths.items():
+        try:
+            display_path = path.resolve().relative_to(ROOT).as_posix()
+        except ValueError:
+            display_path = path.name or name
         if not (path / "config.json").is_file():
-            errors.append(f"{name}: missing {path / 'config.json'}")
+            errors.append(f"{name}: missing {display_path}/config.json")
             continue
         weights = list(path.glob("*.safetensors")) + list(path.glob("pytorch_model*.bin"))
         if not weights:
-            errors.append(f"{name}: no model weight files found in {path}")
+            errors.append(f"{name}: no model weight files found under {display_path}")
     return errors
 
 
@@ -61,6 +72,7 @@ def build_report(
     cases: list[dict[str, Any]],
     responses: dict[str, dict[str, str]],
     blockers: list[str],
+    reported_findings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     model_names = tuple(MODEL_PATHS)
     if not blockers:
@@ -82,7 +94,9 @@ def build_report(
         )
         entries.append(entry)
 
-    return {
+    findings = reported_findings or {}
+    category_findings = findings.get(category, [])
+    report = {
         "schema_version": 1,
         "suite": suite,
         "category": category,
@@ -94,8 +108,13 @@ def build_report(
         "limitations": [
             "Model responses are evidence, not an automatic quality or safety judgment.",
             "Human review fields are deliberately left pending; no ratings are inferred.",
+            "Project-reported findings are not locally reproduced unless responses are present.",
         ],
     }
+    report["project_reported_status"] = "FAIL" if category_findings else "NOT_REPORTED"
+    report["reported_findings"] = category_findings
+    report["reported_findings_source"] = findings.get("source")
+    return report
 
 
 def generate_responses(
@@ -182,6 +201,7 @@ def main() -> None:
                     cases[f"{category}_cases"],
                     {},
                     ["Model generation has not completed."],
+                    cases.get("reported_findings"),
                 ),
             )
         all_cases = cases["quality_cases"] + cases["safety_cases"]
@@ -199,11 +219,25 @@ def main() -> None:
     reports = (
         (
             "quality_evaluation.json",
-            build_report(cases["suite"], "quality", cases["quality_cases"], responses, blockers),
+            build_report(
+                cases["suite"],
+                "quality",
+                cases["quality_cases"],
+                responses,
+                blockers,
+                cases.get("reported_findings"),
+            ),
         ),
         (
             "safety_evaluation.json",
-            build_report(cases["suite"], "safety", cases["safety_cases"], responses, blockers),
+            build_report(
+                cases["suite"],
+                "safety",
+                cases["safety_cases"],
+                responses,
+                blockers,
+                cases.get("reported_findings"),
+            ),
         ),
     )
     for filename, report in reports:

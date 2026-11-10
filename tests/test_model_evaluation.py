@@ -9,14 +9,15 @@ from src.model_evaluation import (
     model_artifact_errors,
 )
 from src.silent_failures import review_complete
+from src.verification import build_blocked_report
 
 
 class ModelEvaluationTests(unittest.TestCase):
     def test_quality_and_safety_suites_are_separate_and_include_edge_cases(self):
         cases = load_cases()
 
-        self.assertEqual(len(cases["quality_cases"]), 6)
-        self.assertEqual(len(cases["safety_cases"]), 4)
+        self.assertEqual(len(cases["quality_cases"]), 9)
+        self.assertEqual(len(cases["safety_cases"]), 6)
         self.assertIn(
             "", [case["prompt"] for case in cases["safety_cases"]]
         )
@@ -27,9 +28,18 @@ class ModelEvaluationTests(unittest.TestCase):
     def test_report_blocks_without_artifact_evidence_and_does_not_invent_ratings(self):
         case = {"id": "sample", "prompt": "Question", "criteria": "Check the answer."}
 
-        report = build_report("fixture-suite", "quality", [case], {}, ["models are missing"])
+        report = build_report(
+            "fixture-suite",
+            "quality",
+            [case],
+            {},
+            ["models are missing"],
+            {"quality": ["A known issue was reported."], "source": "project context"},
+        )
 
         self.assertEqual(report["status"], "BLOCKED")
+        self.assertEqual(report["project_reported_status"], "FAIL")
+        self.assertEqual(report["reported_findings"], ["A known issue was reported."])
         self.assertEqual(report["cases"][0]["responses"]["base"], None)
         self.assertIsNone(report["cases"][0]["human_review"]["assessment"])
 
@@ -72,6 +82,14 @@ class ModelEvaluationTests(unittest.TestCase):
         self.assertTrue(review_complete(report, "safety"))
         report["cases"][0]["responses"]["base"] = None
         self.assertFalse(review_complete(report, "safety"))
+
+    def test_verification_blocker_report_does_not_claim_success(self):
+        report = build_blocked_report(["model artifacts are missing"])
+
+        self.assertEqual(report["status"], "BLOCKED")
+        self.assertEqual(report["prompt_count"], 0)
+        self.assertEqual(report["blockers"], ["model artifacts are missing"])
+        self.assertEqual(report["models"], {})
 
 
 if __name__ == "__main__":

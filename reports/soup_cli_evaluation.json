@@ -75,5 +75,125 @@
       "exit_code": 3,
       "output": "File not found: data\\train.jsonl"
     }
-  ]
+  ],
+  "current_workspace": {
+    "checked_at": "2026-11-10T04:32:42+00:00",
+    "executable": "soup (temporary isolated venv)",
+    "version": "soup v0.77.2\nhttps://github.com/MakazhanAlpamys/Soup",
+    "status": "BLOCKED",
+    "reason": "System Doctor reported missing training extras. Data Doctor: File not found: data\\test.jsonl. Plan returned no executable preflight evidence: dataset hash is zero or model config is unavailable. Ship: Error: evidence has unsupported field(s): 'blockers', 'case_count', 'cases', 'category', 'limitations', 'model_names', 'schema_version', 'status', 'suite'.",
+    "documented_ship_evidence_shape": {
+      "task": {
+        "mode": "metric",
+        "base": "numeric",
+        "tuned": "numeric"
+      },
+      "benchmarks": {
+        "suite_name": {
+          "base": "numeric",
+          "tuned": "numeric"
+        }
+      }
+    },
+    "commands": [
+      {
+        "name": "version",
+        "arguments": [
+          "--version"
+        ],
+        "exit_code": 0,
+        "output": "soup v0.77.2\nhttps://github.com/MakazhanAlpamys/Soup"
+      },
+      {
+        "name": "help",
+        "arguments": [
+          "--no-audit-log",
+          "--help"
+        ],
+        "exit_code": 0,
+        "output": "Usage: soup [OPTIONS] COMMAND [ARGS]..."
+      },
+      {
+        "name": "system_doctor",
+        "arguments": [
+          "--no-audit-log",
+          "doctor"
+        ],
+        "exit_code": 0,
+        "output": "Soup Doctor - checking your environment...\n│ Backend:  unknown (torch not installed)                                     │\nFound 1 issue(s):\n> Training stack not installed: pip install \"soup-cli[train]\""
+      },
+      {
+        "name": "data_doctor_help",
+        "arguments": [
+          "--no-audit-log",
+          "data",
+          "doctor",
+          "--help"
+        ],
+        "exit_code": 0,
+        "output": "Usage: soup data doctor [OPTIONS] {path}\n│    --max-length                                  <int>  Training max_length │\n│    --sample                                      <int>  Number of rows to   │"
+      },
+      {
+        "name": "plan_help",
+        "arguments": [
+          "--no-audit-log",
+          "plan",
+          "--help"
+        ],
+        "exit_code": 0,
+        "output": "Usage: soup plan [OPTIONS]\n│ --config             -c      <str>  Path to soup.yaml. [default: soup.yaml] │\n│ --state                      <str>  Path to write the state file (default:  │"
+      },
+      {
+        "name": "ship_help",
+        "arguments": [
+          "--no-audit-log",
+          "ship",
+          "--help"
+        ],
+        "exit_code": 0,
+        "output": "Usage: soup ship [OPTIONS] COMMAND [ARGS]...\n│ --base                          <str>    Base model id/path (the 'before'). │\n│ --adapter                       <str>    LoRA adapter path (tuned = base +  │\n│ --task-eval                     <str>    JSONL of leg-1 task-win eval       │\n│ --baseline                      <str>    registry://<id> or stamped JSON of │\n│ --evidence                      <str>    JSON of pre-computed scores        │\n│ --output                -o      <str>    Write the verdict JSON to this     │\n│ --emit-evidence                 <str>    Write the scores in the --evidence │\n│                                          With --evidence alone it GATES     │\n│                                          requires --evidence, --config,     │\n│                                          --adapter and task eval. Compare   │"
+      },
+      {
+        "name": "data_doctor",
+        "arguments": [
+          "--no-audit-log",
+          "data",
+          "doctor",
+          "data/test.jsonl",
+          "--model",
+          "Qwen/Qwen2.5-0.5B-Instruct",
+          "--max-length",
+          "512"
+        ],
+        "exit_code": 1,
+        "output": "File not found: data\\test.jsonl"
+      },
+      {
+        "name": "preflight_plan",
+        "arguments": [
+          "--no-audit-log",
+          "plan",
+          "--config",
+          "soup.yaml",
+          "--state",
+          "<temporary-state>"
+        ],
+        "exit_code": 0,
+        "output": "Training plan                                 \n┌─────────────────────────┬───────────────────────────────────────────────────┐\n│ Field                   │ Value                                             │\n├─────────────────────────┼───────────────────────────────────────────────────┤\n│ base                    │ ./models/base                                     │\n│ task                    │ sft                                               │\n│ config_sha              │ 89b7217d7fcaf058...                               │\n│ dataset_sha             │ 0000000000000000...                               │\n│ estimated_cost          │ $0.0500                                           │\n│ estimated_minutes       │ 10.0                                              │\n│ peak_vram_gb            │ unknown: could not read the model's config.json   │\n│                         │ (local, cache or Hub)                             │\n│ spot_price_usd_per_hour │ $0.30                                             │\n└─────────────────────────┴───────────────────────────────────────────────────┘\n┌─────────────────────────────────── plan ────────────────────────────────────┐\n│ Plan written to <temporary-state>.  │\n│ Review the numbers, then run `soup apply` to record the plan.               │\n└─────────────────────────────────────────────────────────────────────────────┘"
+      },
+      {
+        "name": "ship_offline",
+        "arguments": [
+          "--no-audit-log",
+          "ship",
+          "--evidence",
+          "reports/quality_evaluation.json",
+          "--output",
+          "<temporary-output>"
+        ],
+        "exit_code": 3,
+        "output": "Error: evidence has unsupported field(s): 'blockers', 'case_count', 'cases', \n'category', 'limitations', 'model_names', 'schema_version', 'status', 'suite'"
+      }
+    ]
+  }
 }

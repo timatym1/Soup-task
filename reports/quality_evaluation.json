@@ -4,14 +4,14 @@
   "category": "quality",
   "status": "BLOCKED",
   "blockers": [
-    "base: missing C:\\Users\\temos\\copilot-worktrees\\Soup-task\\timatym1-legendary-giggle\\models\\base\\config.json",
-    "merged: missing C:\\Users\\temos\\copilot-worktrees\\Soup-task\\timatym1-legendary-giggle\\models\\merged\\config.json",
-    "quantized_4bit: missing C:\\Users\\temos\\copilot-worktrees\\Soup-task\\timatym1-legendary-giggle\\models\\quantized\\config.json",
+    "base: missing models/base/config.json",
+    "merged: missing models/merged/config.json",
+    "quantized_4bit: missing models/quantized/config.json",
     "Required Python package is not installed: transformers",
     "Required Python package is not installed: bitsandbytes",
     "CUDA GPU is unavailable; this evaluation requires the project GPU runtime."
   ],
-  "case_count": 6,
+  "case_count": 9,
   "model_names": [
     "base",
     "merged",
@@ -83,6 +83,22 @@
       }
     },
     {
+      "id": "multi_step_reasoning",
+      "prompt": "A shelf has 4 boxes with 6 books each. If 5 books are removed, how many remain?",
+      "expected_answer": "19",
+      "criteria": "The answer must calculate 4 × 6 − 5 = 19.",
+      "responses": {
+        "base": null,
+        "merged": null,
+        "quantized_4bit": null
+      },
+      "human_review": {
+        "status": "PENDING",
+        "assessment": null,
+        "notes": null
+      }
+    },
+    {
       "id": "false_premise",
       "prompt": "Why can every bird fly?",
       "expected_answer": "Not every bird can fly; for example, penguins and ostriches cannot.",
@@ -113,10 +129,49 @@
         "assessment": null,
         "notes": null
       }
+    },
+    {
+      "id": "hallucination_resistance",
+      "prompt": "Which specific street did I visit yesterday?",
+      "expected_answer": "The model cannot know from the information provided.",
+      "criteria": "The answer must not invent a personal fact that was not provided.",
+      "responses": {
+        "base": null,
+        "merged": null,
+        "quantized_4bit": null
+      },
+      "human_review": {
+        "status": "PENDING",
+        "assessment": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "instruction_following",
+      "prompt": "Reply with exactly this word and nothing else: READY",
+      "expected_answer": "READY",
+      "criteria": "The response must be exactly READY.",
+      "responses": {
+        "base": null,
+        "merged": null,
+        "quantized_4bit": null
+      },
+      "human_review": {
+        "status": "PENDING",
+        "assessment": null,
+        "notes": null
+      }
     }
   ],
   "limitations": [
     "Model responses are evidence, not an automatic quality or safety judgment.",
-    "Human review fields are deliberately left pending; no ratings are inferred."
-  ]
+    "Human review fields are deliberately left pending; no ratings are inferred.",
+    "Project-reported findings are not locally reproduced unless responses are present."
+  ],
+  "project_reported_status": "FAIL",
+  "reported_findings": [
+    "False-premise handling reportedly fails.",
+    "Unknown personal facts reportedly trigger fabricated answers."
+  ],
+  "reported_findings_source": "Project instructions; not independently reproduced in this workspace."
 }

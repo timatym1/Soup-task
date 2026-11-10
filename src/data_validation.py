@@ -71,6 +71,17 @@ def _read_jsonl(path: Path) -> list[Any]:
     return rows
 
 
+def split_file_status(path: Path) -> str:
+    try:
+        with path.open("rb"):
+            pass
+    except FileNotFoundError:
+        return "MISSING"
+    except OSError:
+        return "INACCESSIBLE"
+    return "PRESENT"
+
+
 def validate_existing_splits(
     train_path: Path, test_path: Path
 ) -> dict[str, Any]:
@@ -107,10 +118,32 @@ def validate_existing_splits(
 
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
-    summary = validate_existing_splits(
-        root / "data" / "train.jsonl",
-        root / "data" / "test.jsonl",
-    )
+    split_paths = {
+        "train": root / "data" / "train.jsonl",
+        "test": root / "data" / "test.jsonl",
+    }
+    split_statuses = {
+        name: split_file_status(path) for name, path in split_paths.items()
+    }
+    unavailable = {
+        name: status for name, status in split_statuses.items() if status != "PRESENT"
+    }
+    if unavailable:
+        summary = {
+            "status": "BLOCKED",
+            "validation_scope": "existing train/test JSONL splits; source dataset not re-read",
+            "splits": {
+                name: {"path": f"data/{name}.jsonl", "status": status}
+                for name, status in split_statuses.items()
+            },
+            "blockers": [
+                f"data/{name}.jsonl is {status.lower()} under the repository root."
+                for name, status in unavailable.items()
+            ],
+        }
+        destination = save_validation_report(summary)
+        raise RuntimeError(f"Data validation blocked; see {destination}: {summary['blockers']}")
+    summary = validate_existing_splits(split_paths["train"], split_paths["test"])
     destination = save_validation_report(summary)
     if summary["status"] != "PASS":
         raise RuntimeError(f"Existing data splits failed validation; see {destination}.")
